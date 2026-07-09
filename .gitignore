@@ -1,0 +1,49 @@
+# ==========================================
+# 1. OS & IDE (운영체제 및 에디터 환경 설정)
+# ==========================================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.suo
+*.user
+
+# ==========================================
+# 2. Java & Spring Boot (fds-spring-server)
+# ==========================================
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+out/
+bin/
+*.class
+
+# ==========================================
+# 3. Python & FastAPI (fds-python-server)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+
+# ==========================================
+# 4. React & Node.js (fds-frontend-react)
+# ==========================================
+node_modules/
+dist/
+.npm/
+
+# ==========================================
+# 5. Secrets & Logs (보안 및 로그 파일 - 매우 중요)
+# ==========================================
+.env
+.env.*
+*.log
+docker-compose.override.yml
