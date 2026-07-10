@@ -34,3 +34,9 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# JWT 설정
+jwt:
+  secret: "dGhpcyBpcyBhIHNlY3VyZSBzZWNyZXQga2V5IGZvciBmZHMgc3lzdGVt"  # Base64(256-bit) - 운영 시 반드시 교체
+  access-token-expiration-ms: 1800000    # 30분
+  refresh-token-expiration-ms: 604800000 # 7일
