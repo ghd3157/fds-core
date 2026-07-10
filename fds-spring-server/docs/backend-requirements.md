@@ -111,5 +111,12 @@ For multi-step tasks, state a brief plan:
   - `FraudProcessService` 연동 완료
 
 ## 6. 프론트엔드 연동 REST API
-- [ ] **대시보드 통계 API:** Redis에서 최근 24시간 정상/이상 결제 비율, 시간대별 트래픽 반환
-- [ ] **이상 탐지 내역 API:** 위험 스코어 순 또는 최신순으로 탐지 내역 페이징(Pagination) 조회
+- [x] **대시보드 통계 API:** Redis에서 최근 24시간 정상/이상 결제 비율, 시간대별 트래픽 반환
+  - `controller/DashboardController.java` — GET /api/v1/dashboard/stats
+  - `service/DashboardService.java` — Redis에서 오늘 날짜 키 조회 후 건수/비율 계산
+  - `dto/DashboardStatsResponseDto.java`
+- [x] **이상 탐지 내역 API:** 위험 스코어 순 또는 최신순으로 탐지 내역 페이징(Pagination) 조회
+  - `controller/DashboardController.java` — GET /api/v1/dashboard/history?sort=riskScore,desc
+  - `service/DashboardService.java` — Pageable 위임, Page<FraudHistoryResponseDto> 반환
+  - `dto/FraudHistoryResponseDto.java` — 정적 팩토리 메서드 from(FraudAlert)
+  - `repository/FraudAlertRepository.java` — Page<FraudAlert> findAll(Pageable) 추가
