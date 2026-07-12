@@ -1,8 +1,33 @@
+import { useState, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import useWebSocket, { type FraudAlert } from '../hooks/useWebSocket'
+import ToastContainer, { type Toast } from '../components/ToastContainer'
+import FraudPieChart from '../components/FraudPieChart'
+import TransactionTable from '../components/TransactionTable'
+// TODO: 백엔드 연동 시 아래 import 복원
+// import { getDashboardStats, type DashboardStats } from '../api/dashboardApi'
+import type { DashboardStats } from '../api/dashboardApi'
+
+// ── 임시 더미 통계 (백엔드 연동 전) ──────────────────────────
+const DUMMY_STATS: DashboardStats = { todayFraudCount: 23, pendingCount: 8, completeCount: 127 }
+// ─────────────────────────────────────────────────────────────
 
 // 공통 레이아웃 (사이드바 + 상단 네비게이션바)
 function DashboardLayout() {
   const navigate = useNavigate()
+  const [toasts, setToasts] = useState<Toast[]>([])
+
+  const addToast = useCallback((alert: FraudAlert) => {
+    const message =
+      alert.message || `거래 ID: ${alert.transactionId} / 금액: ${alert.amount.toLocaleString()}원`
+    setToasts((prev) => [...prev, { id: Date.now(), message }])
+  }, [])
+
+  const removeToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
+  useWebSocket({ onAlert: addToast })
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken')
@@ -11,6 +36,9 @@ function DashboardLayout() {
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
+      {/* 우측 상단 Toast 알림 */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+
       {/* 사이드바 */}
       <aside className="w-60 bg-gray-900 border-r border-gray-800 flex flex-col">
         <div className="px-6 py-5 border-b border-gray-800">
@@ -61,33 +89,53 @@ function DashboardLayout() {
   )
 }
 
+// 통계 카드
+const STAT_CARDS = [
+  { key: 'todayFraudCount', label: '오늘 탐지 건수', color: 'text-red-400', icon: '🚨' },
+  { key: 'pendingCount', label: '처리 중 (PENDING)', color: 'text-yellow-400', icon: '⏳' },
+  { key: 'completeCount', label: '처리 완료 (COMPLETE)', color: 'text-green-400', icon: '✅' },
+] as const
+
 export default function DashboardPage() {
+  // TODO: 백엔드 연동 시 아래 코드로 교체
+  // const [stats, setStats] = useState<DashboardStats | null>(null)
+  // useEffect(() => { getDashboardStats().then(setStats).catch(() => {}) }, [])
+  const stats: DashboardStats = DUMMY_STATS
+
   return (
     <div className="flex flex-col gap-6">
+      {/* 페이지 타이틀 */}
       <div>
         <h1 className="text-xl font-bold text-white">실시간 모니터링</h1>
         <p className="text-gray-400 text-sm mt-1">신용카드 이상 결제 탐지 현황</p>
       </div>
 
-      {/* 통계 카드 (Step 4에서 실제 데이터로 교체) */}
+      {/* 통계 카드 */}
       <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: '오늘 탐지 건수', value: '-', color: 'text-red-400' },
-          { label: '처리 중 (PENDING)', value: '-', color: 'text-yellow-400' },
-          { label: '처리 완료 (COMPLETE)', value: '-', color: 'text-green-400' },
-        ].map((card) => (
-          <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <p className="text-gray-400 text-sm">{card.label}</p>
-            <p className={`text-3xl font-bold mt-2 ${card.color}`}>{card.value}</p>
+        {STAT_CARDS.map(({ key, label, color, icon }) => (
+          <div key={key} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-gray-400 text-sm">{label}</p>
+              <span className="text-lg">{icon}</span>
+            </div>
+            <p className={`text-3xl font-bold ${color}`}>
+              {stats ? stats[key].toLocaleString() : '—'}
+            </p>
           </div>
         ))}
       </div>
 
-      {/* 차트 / 테이블 영역 (Step 4에서 구현) */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <p className="text-gray-500 text-sm text-center py-12">
-          📈 차트 및 결제 내역 테이블은 Step 4에서 구현됩니다.
-        </p>
+      {/* 차트 + 테이블 영역 */}
+      <div className="grid grid-cols-3 gap-6">
+        {/* 파이 차트 (1/3) */}
+        <div className="col-span-1">
+          <FraudPieChart />
+        </div>
+
+        {/* 결제 내역 테이블 (2/3) */}
+        <div className="col-span-2">
+          <TransactionTable />
+        </div>
       </div>
     </div>
   )
