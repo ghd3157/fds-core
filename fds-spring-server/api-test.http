@@ -1,0 +1,25 @@
+### 1. 로그 수집 API 테스트 (Kafka 전송 및 DB 저장 검증)
+POST http://localhost:8080/api/v1/logs
+Content-Type: application/json
+
+{
+  "transactionId": "test-hash-12345",
+  "userId": "630423337322",
+  "amount": 107.23,
+  "merchantCategory": "grocery_pos",
+  "transactionDate": "2023-10-27T10:15:30",
+  "latitude": 48.8878,
+  "longitude": -118.2105
+}
+
+###
+
+### 2. 대시보드 통계 조회 API 테스트 (Redis 연동 검증)
+GET http://localhost:8080/api/v1/dashboard/stats
+Accept: application/json
+
+###
+
+### 3. 이상 탐지 내역 조회 API 테스트 (JPA 페이징 검증)
+GET http://localhost:8080/api/v1/dashboard/history?page=0&size=10
+Accept: application/json
