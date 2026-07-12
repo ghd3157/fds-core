@@ -81,6 +81,8 @@ For multi-step tasks, state a brief plan:
   - `controller/AuthController.java` — POST /api/auth/login → TokenResponse (accessToken, refreshToken)
   - `dto/LoginRequest.java`, `dto/TokenResponse.java`
   - `repository/AdminRepository.java`
+- [x] 서버 기동 시 기본 관리자 계정(admin) 자동 생성
+  - `DataInitializer.java` — CommandLineRunner, BCrypt 암호화 사용
 
 ## 3. 데이터 수집 및 비동기 파이프라인 (Kafka Producer)
 - [x] 결제 로그 트래픽을 지속적으로 수신받는 `LogIngestionController` 구현

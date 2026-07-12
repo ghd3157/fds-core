@@ -31,9 +31,10 @@ public class SecurityConfig {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll()       // 로그인은 인증 없이 허용
-                .requestMatchers("/api/v1/logs").permitAll()       // 외부 결제 로그 수집 허용
-                .anyRequest().hasRole("ADMIN")                     // 나머지는 ROLE_ADMIN만 접근
+                    .requestMatchers("/api/auth/**").permitAll()       // 로그인은 인증 없이 허용
+                    .requestMatchers("/api/v1/logs").permitAll()       // 외부 결제 로그 수집 허용
+                    .requestMatchers("/api/v1/dashboard/**").permitAll() // 🚨 임시로 대시보드 접근 허용!
+                    .anyRequest().authenticated()                        // 나머지는 인증 필요
             )
             .addFilterBefore(
                 new JwtAuthenticationFilter(jwtProvider),
