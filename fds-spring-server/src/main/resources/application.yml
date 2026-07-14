@@ -34,6 +34,10 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all          # 모든 ISR 복제본이 수신 확인 후 ack (데이터 유실 방지)
+      retries: 3         # 일시적 오류 시 재시도 횟수
+      properties:
+        linger.ms: 0     # 배치 대기 시간 0 → 즉시 전송 (기본값과 동일하나 명시적으로 지정)
 
 # JWT 설정
 jwt:
