@@ -1,82 +1,82 @@
-# [Step 1 & 2] Implementation Notes
-> Reference spec: `docs/python-requirements.md`
+# [Step 1 & 2] 구현 기록
+> 참고 명세서: `docs/python-requirements.md`
 
-## Overview
+## 개요
 
-Implemented the foundational layer of the FDS (Fraud Detection System) Python server:
-- **Step 1**: Kafka async Consumer / Producer skeleton wired to FastAPI background task
-- **Step 2**: Pydantic data validation models (Input / Output schemas)
+FDS(이상 거래 탐지 시스템) Python 서버의 기반 레이어 구현:
+- **Step 1**: FastAPI 백그라운드 태스크와 연동된 Kafka 비동기 컨슈머 / 프로듀서 뼈대 구축
+- **Step 2**: Pydantic 데이터 검증 모델 (입력 / 출력 스키마) 작성
 
 ---
 
-## Project Setup
+## 프로젝트 설정
 
-### Requirements (`requirements.txt`)
+### 패키지 목록 (`requirements.txt`)
 
-| Package | Purpose |
+| 패키지 | 용도 |
 |---|---|
-| `fastapi` | Async web framework |
-| `uvicorn` | ASGI server |
-| `pandas` | Data preprocessing (Step 3) |
-| `confluent-kafka` | Kafka Consumer / Producer client |
-| `pydantic` | JSON data validation (Step 2) |
+| `fastapi` | 비동기 웹 프레임워크 |
+| `uvicorn` | ASGI 서버 |
+| `pandas` | 데이터 전처리 (Step 3에서 사용) |
+| `confluent-kafka` | Kafka 컨슈머 / 프로듀서 클라이언트 |
+| `pydantic` | JSON 데이터 검증 (Step 2) |
 
-### Entry Point
+### 실행 방법
 
-The FastAPI app was moved from `main.py` (root) into `app/main.py` to follow the standard package structure.
-Run with:
+FastAPI 앱은 표준 패키지 구조를 따르기 위해 루트의 `main.py` 대신 `app/main.py` 로 이동:
+
 ```bash
 uvicorn app.main:app --reload
 ```
 
 ---
 
-## Step 2 — Pydantic Schemas (`app/schemas.py`)
+## Step 2 — Pydantic 스키마 (`app/schemas.py`)
 
-### Input: `PaymentLogInput`
+### 입력 스키마: `PaymentLogInput`
 
-Validates messages received from `payment-log-topic` (Java → Python).
+`payment-log-topic` 수신 메시지 검증 (Java → Python)
 
-| Field | Type | Description |
+| 필드 | 타입 | 설명 |
 |---|---|---|
-| `transactionId` | `str` | Unique transaction ID |
-| `userId` | `str` | User identifier |
-| `amount` | `float` | Transaction amount |
-| `merchantCategory` | `str` | Merchant category code |
-| `transactionDate` | `str` | ISO-8601 timestamp |
-| `latitude` | `float` | Transaction location (lat) |
-| `longitude` | `float` | Transaction location (lng) |
+| `transactionId` | `str` | 고유 결제 ID |
+| `userId` | `str` | 사용자 식별자 |
+| `amount` | `float` | 결제 금액 |
+| `merchantCategory` | `str` | 가맹점 업종 코드 |
+| `transactionDate` | `str` | ISO-8601 형식 거래 일시 |
+| `latitude` | `float` | 거래 위치 (위도) |
+| `longitude` | `float` | 거래 위치 (경도) |
 
-### Output: `FraudResultOutput`
+### 출력 스키마: `FraudResultOutput`
 
-Validates messages sent to `fraud-result-topic` (Python → Java).
+`fraud-result-topic` 송신 메시지 검증 (Python → Java)
 
-| Field | Type | Constraint | Description |
+| 필드 | 타입 | 제약 조건 | 설명 |
 |---|---|---|---|
-| `transactionId` | `str` | — | Original transaction ID |
-| `isFraud` | `bool` | — | AI fraud determination result |
-| `fraudScore` | `float` | `0.0 ≤ x ≤ 1.0` | Risk score |
-| `reason` | `str` | — | Reason for determination |
+| `transactionId` | `str` | — | 원본 결제 ID |
+| `isFraud` | `bool` | — | AI 사기 판별 결과 |
+| `fraudScore` | `float` | `0.0 ≤ x ≤ 1.0` | 위험도 스코어 |
+| `reason` | `str` | — | 판별 근거 |
 
-> `fraudScore` is constrained with `Field(ge=0.0, le=1.0)` to enforce the 0–1 range at the Pydantic validation layer.
+> `fraudScore` 는 `Field(ge=0.0, le=1.0)` 으로 Pydantic 검증 레이어에서 0~1 범위를 강제함.
 
 ---
 
-## Step 1 — Kafka Skeleton (`app/kafka_client.py` + `app/main.py`)
+## Step 1 — Kafka 뼈대 (`app/kafka_client.py` + `app/main.py`)
 
-### Kafka Configuration
+### Kafka 설정
 
-| Key | Value |
+| 항목 | 값 |
 |---|---|
-| Broker | `127.0.0.1:9092` |
-| Consumer Topic | `payment-log-topic` |
-| Producer Topic | `fraud-result-topic` |
-| Consumer Group | `fds-python-group` |
+| 브로커 주소 | `127.0.0.1:9092` |
+| 컨슈머 토픽 | `payment-log-topic` |
+| 프로듀서 토픽 | `fraud-result-topic` |
+| 컨슈머 그룹 | `fds-python-group` |
 
-### Consumer Architecture
+### 컨슈머 아키텍처
 
 ```
-FastAPI startup
+FastAPI 시작
     └─ asyncio.create_task(run_kafka_consumer())
             └─ while True:
                     └─ loop.run_in_executor(None, consumer.poll, 1.0)
@@ -84,10 +84,10 @@ FastAPI startup
                                     └─ produce_fraud_result(result)
 ```
 
-- `consumer.poll()` is a blocking call, delegated to a thread executor via `run_in_executor` to avoid blocking the asyncio event loop.
-- The consumer loop is launched as an `asyncio.Task` on FastAPI startup and cancelled gracefully on shutdown.
+- `consumer.poll()` 은 블로킹 호출이므로 `run_in_executor` 를 통해 스레드 풀로 위임하여 asyncio 이벤트 루프 블로킹 방지.
+- 컨슈머 루프는 FastAPI 시작 시 `asyncio.Task` 로 실행되고, 종료 시 graceful cancel 처리.
 
-### FastAPI Lifecycle (`app/main.py`)
+### FastAPI 라이프사이클 (`app/main.py`)
 
 ```python
 @app.on_event("startup")
@@ -100,29 +100,29 @@ async def shutdown_event():
     await asyncio.gather(_consumer_task, return_exceptions=True)
 ```
 
-> **Note**: `@app.on_event` is soft-deprecated in newer FastAPI versions. Migration to `lifespan` context manager is recommended in a future step.
+> **참고**: `@app.on_event` 는 최신 FastAPI 버전에서 소프트 deprecated. 향후 `lifespan` 컨텍스트 매니저로 마이그레이션 예정.
 
-### Message Processing Flow (Dummy — Step 3 placeholder)
+### 메시지 처리 흐름 (Step 3 연동 전 더미 구현)
 
 ```
-Receive raw bytes from Kafka
+Kafka 수신 raw bytes
     → json.loads()
-    → PaymentLogInput(**payload)   # Pydantic validation
-    → Build FraudResultOutput (dummy: isFraud=False, fraudScore=0.0)
-    → produce_fraud_result()       # Serialize & publish to fraud-result-topic
+    → PaymentLogInput(**payload)   # Pydantic 검증
+    → FraudResultOutput 더미 생성 (isFraud=False, fraudScore=0.0)
+    → produce_fraud_result()       # 직렬화 후 fraud-result-topic 발행
 ```
 
 ---
 
-## File Structure After This Step
+## 구현 후 파일 구조
 
 ```
 fds-python-server/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py          # FastAPI app + lifecycle hooks
-│   ├── schemas.py       # Pydantic Input / Output models
-│   └── kafka_client.py  # Kafka Consumer & Producer skeleton
+│   ├── main.py          # FastAPI 앱 + 라이프사이클 훅
+│   ├── schemas.py       # Pydantic 입출력 모델
+│   └── kafka_client.py  # Kafka 컨슈머 & 프로듀서 뼈대
 ├── docs/
 │   └── python-requirements.md
 └── requirements.txt
@@ -130,8 +130,8 @@ fds-python-server/
 
 ---
 
-## Next Step
+## 다음 단계
 
-**[Step 3]** Replace the dummy `_process_message()` body in `kafka_client.py` with:
-- Pandas preprocessing pipeline
-- Actual AI / rule-based fraud inference logic
+**[Step 3]** `kafka_client.py` 의 더미 `_process_message()` 내부를 아래로 교체:
+- Pandas 전처리 파이프라인
+- 실제 AI / 규칙 기반 사기 추론 로직
