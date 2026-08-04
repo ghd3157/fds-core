@@ -1,6 +1,7 @@
 package com.example.demo.dto;
 
 import com.example.demo.domain.TransactionLog;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -16,7 +17,11 @@ public class TransactionResponseDto {
     private BigDecimal amount;
     private String category;
     private String status;
+
+    /** primitive boolean + Lombok @Getter → Jackson이 'fraud'로 직렬화하는 문제 방지 */
+    @JsonProperty("isFraud")
     private boolean isFraud;
+
     private LocalDateTime createdAt;
 
     /**
