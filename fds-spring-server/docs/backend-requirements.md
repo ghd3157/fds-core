@@ -122,3 +122,19 @@ For multi-step tasks, state a brief plan:
   - `service/DashboardService.java` — Pageable 위임, Page<FraudHistoryResponseDto> 반환
   - `dto/FraudHistoryResponseDto.java` — 정적 팩토리 메서드 from(FraudAlert)
   - `repository/FraudAlertRepository.java` — Page<FraudAlert> findAll(Pageable) 추가
+- [x] **거래 내역 페이징 API:** 전체 거래 내역을 transactionDate 내림차순으로 페이징 조회, isFraud 필드 포함
+  - `controller/TransactionController.java` — GET /api/v1/transactions?page=&size=
+  - `service/TransactionService.java` — Page<TransactionLog> 조회 후 FraudAlert 존재 여부로 isFraud 판단
+  - `dto/TransactionResponseDto.java` — 정적 팩토리 메서드 of(TransactionLog, isFraud)
+  - `repository/TransactionLogRepository.java` — findAllByOrderByTransactionDateDesc(Pageable) 추가
+  - `repository/FraudAlertRepository.java` — existsByTransactionLog(TransactionLog) 추가
+- [x] **요약 통계 API:** 오늘 사기 탐지 건수(Redis) + 전체 PENDING/COMPLETE 건수(DB) 반환
+  - `controller/StatsController.java` — GET /api/v1/stats/summary
+  - `service/StatsService.java` — Redis fds:stats:{yyyy-MM-dd}:fraud 키 조회 + countByStatus()
+  - `dto/SummaryStatsResponseDto.java`
+  - `repository/TransactionLogRepository.java` — countByStatus(ProcessStatus) 추가
+- [x] **카테고리별 사기 집계 API:** FraudAlert 기준 merchantCategory GROUP BY 집계
+  - `controller/StatsController.java` — GET /api/v1/stats/fraud-by-category
+  - `service/StatsService.java` — countByMerchantCategory() 결과를 CategoryStatDto 리스트로 변환
+  - `dto/CategoryStatDto.java`
+  - `repository/FraudAlertRepository.java` — JPQL GROUP BY 쿼리 추가

@@ -1,25 +1,94 @@
 ### 1. 로그 수집 API 테스트 (Kafka 전송 및 DB 저장 검증)
+### 1. 정상 결제 로그 전송 (금액 소액 랜덤, 현재 시간 자동 갱신)
 POST http://localhost:8080/api/v1/logs
 Content-Type: application/json
 
 {
-  "transactionId": "test-hash-12345",
-  "userId": "630423337322",
-  "amount": 107.23,
+  "transactionId": "normal-{{$uuid}}",
+  "userId": "user-{{$random.integer(1000, 9999)}}",
+  "amount": {{$random.integer(10, 50)}},
   "merchantCategory": "grocery_pos",
-  "transactionDate": "2023-10-27T10:15:30",
+  "transactionDate": "{{$isoTimestamp}}",
+  "latitude": 48.8878,
+  "longitude": -118.2105
+}
+
+### 2. 이상 탐지(Fraud) 테스트용 결제 전송 (초고액 랜덤, 현재 시간 자동 갱신)
+< {%
+    // 자바스크립트를 이용해 약간의 로직을 섞을 수도 있습니다.
+    // 예: 새벽 3시로 고정된 비정상적인 시간을 만들고 싶을 때
+    let d = new Date();
+    d.setHours(3, 0, 0, 0);
+    request.variables.set("fraudTime", d.toISOString().split('.')[0]);
+%}
+POST http://localhost:8080/api/v1/logs
+Content-Type: application/json
+
+{
+  "transactionId": "fraud-{{$uuid}}",
+  "userId": "user-{{$random.integer(1000, 9999)}}",
+  "amount": {{$random.integer(5000, 10000)}},
+  "merchantCategory": "entertainment",
+  "transactionDate": "{{fraudTime}}",
   "latitude": 48.8878,
   "longitude": -118.2105
 }
 
 ###
 
-### 2. 대시보드 통계 조회 API 테스트 (Redis 연동 검증)
+### 3. 대시보드 통계 조회 API 테스트 (Redis 연동 검증)
 GET http://localhost:8080/api/v1/dashboard/stats
 Accept: application/json
 
 ###
 
-### 3. 이상 탐지 내역 조회 API 테스트 (JPA 페이징 검증)
+### 4. 이상 탐지 내역 조회 API 테스트 (JPA 페이징 검증)
 GET http://localhost:8080/api/v1/dashboard/history?page=0&size=10
 Accept: application/json
+
+###
+
+### ── 신규 API 테스트 ──────────────────────────────────────────────
+### ※ /api/v1/transactions, /api/v1/stats/* 는 JWT 인증이 필요합니다.
+###   아래 순서대로 실행하세요: [5. 로그인] → 토큰 복사 → [6·7·8 테스트]
+
+### 5. 로그인 (JWT 토큰 자동 저장)
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "1234"
+}
+
+> {%
+    client.global.set("jwt_token", response.body.accessToken);
+    client.log("✅ 토큰 저장 완료: " + response.body.accessToken);
+%}
+
+###
+
+### 6. 거래 내역 페이징 조회
+### GET /api/v1/transactions?page=0&size=10
+### → isFraud 포함한 Spring Page 형식으로 반환
+GET http://localhost:8080/api/v1/transactions?page=0&size=10
+Accept: application/json
+Authorization: Bearer {{jwt_token}}
+
+###
+
+### 7. 요약 통계 조회
+### GET /api/v1/stats/summary
+### → todayFraudCount(Redis), pendingCount, completeCount(DB)
+GET http://localhost:8080/api/v1/stats/summary
+Accept: application/json
+Authorization: Bearer {{jwt_token}}
+
+###
+
+### 8. 카테고리별 사기 탐지 건수 조회
+### GET /api/v1/stats/fraud-by-category
+### → [{ "category": "grocery_pos", "count": 42 }, ...]
+GET http://localhost:8080/api/v1/stats/fraud-by-category
+Accept: application/json
+Authorization: Bearer {{jwt_token}}
