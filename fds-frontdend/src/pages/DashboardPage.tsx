@@ -1,16 +1,10 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import useWebSocket, { type FraudAlert } from '../hooks/useWebSocket'
 import ToastContainer, { type Toast } from '../components/ToastContainer'
 import FraudPieChart from '../components/FraudPieChart'
 import TransactionTable from '../components/TransactionTable'
-// TODO: 백엔드 연동 시 아래 import 복원
-// import { getDashboardStats, type DashboardStats } from '../api/dashboardApi'
-import type { DashboardStats } from '../api/dashboardApi'
-
-// ── 임시 더미 통계 (백엔드 연동 전) ──────────────────────────
-const DUMMY_STATS: DashboardStats = { todayFraudCount: 23, pendingCount: 8, completeCount: 127 }
-// ─────────────────────────────────────────────────────────────
+import { getDashboardStats, type DashboardStats } from '../api/dashboardApi'
 
 // 공통 레이아웃 (사이드바 + 상단 네비게이션바)
 function DashboardLayout() {
@@ -97,10 +91,14 @@ const STAT_CARDS = [
 ] as const
 
 export default function DashboardPage() {
-  // TODO: 백엔드 연동 시 아래 코드로 교체
-  // const [stats, setStats] = useState<DashboardStats | null>(null)
-  // useEffect(() => { getDashboardStats().then(setStats).catch(() => {}) }, [])
-  const stats: DashboardStats = DUMMY_STATS
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
+
+  useEffect(() => {
+    getDashboardStats()
+      .then(setStats)
+      .finally(() => setStatsLoading(false))
+  }, [])
 
   return (
     <div className="flex flex-col gap-6">
@@ -119,7 +117,11 @@ export default function DashboardPage() {
               <span className="text-lg">{icon}</span>
             </div>
             <p className={`text-3xl font-bold ${color}`}>
-              {stats ? stats[key].toLocaleString() : '—'}
+              {statsLoading ? (
+                <span className="inline-block w-16 h-8 bg-gray-700 rounded animate-pulse" />
+              ) : (
+                stats ? stats[key].toLocaleString() : '—'
+              )}
             </p>
           </div>
         ))}
