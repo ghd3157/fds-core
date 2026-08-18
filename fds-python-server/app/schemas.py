@@ -19,8 +19,10 @@ class FraudResultOutput(BaseModel):
     """
     [Output] 송신 데이터 스키마 (Python -> Java via Kafka)
     Topic: fraud-result-topic
+
+    Spring FraudResultDto 스펙:
+        {"transactionId": "...", "riskScore": 95.0, "fraudReason": "..."}
     """
     transactionId: str = Field(..., description="원본 결제 번호")
-    isFraud: bool = Field(..., description="AI 판별 결과 (사기 여부)")
-    fraudScore: float = Field(..., ge=0.0, le=1.0, description="0.0 ~ 1.0 사이의 위험도 스코어")
-    reason: str = Field(..., description='판별 근거 (예: "Abnormal location", "High amount")')
+    riskScore: float = Field(..., ge=0.0, le=100.0, description="0.0 ~ 100.0 사이의 위험도 스코어 (Spring 스펙)")
+    fraudReason: str = Field(..., description='판별 근거 (예: "Abnormal location", "High amount")')

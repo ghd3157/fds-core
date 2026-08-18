@@ -1,6 +1,6 @@
 # [Step 3] Pandas 전처리 파이프라인 및 더미 AI 추론 로직 구현 기록
 > 참고 명세서: `docs/python-requirements.md`  
-> 작업 일시: 2026-07-15
+> 작업 일시: 2026-07-15 / 최종 수정: 2026-08-18
 
 ## 개요
 
@@ -18,7 +18,7 @@ _process_message()          [kafka_client.py]
     ↓ PaymentLogInput (Pydantic 검증 완료)
 analyze_fraud_risk()        [fraud_detector.py]  ← Step 3 신규 모듈
     ├─ _preprocess()        → Pandas DataFrame + 파생 변수 생성
-    └─ _apply_rules()       → (isFraud, fraudScore, reason) 반환
+    └─ _apply_rules()       → (riskScore, fraudReason) 반환
     ↓ FraudResultOutput
 produce_fraud_result()      [kafka_client.py]
     ↓
@@ -38,14 +38,19 @@ Step 4에서 실제 AI 모델 연동 시 이 파일의 `_apply_rules()` 함수�
 
 `PaymentLogInput` Pydantic 객체를 Pandas DataFrame으로 변환하고 파생 변수를 생성한다.
 
+> **2026-08-18 변경**: `transactionDate`를 UTC로 파싱한 뒤 **KST(Asia/Seoul, UTC+9)로 변환**하여,
+> `transaction_hour` / `is_night` 판별이 한국 현지시각 기준으로 동작하도록 수정.
+
 | 파생 컬럼 | 타입 | 설명 |
 |---|---|---|
-| `transaction_hour` | `int` | `transactionDate` 에서 추출한 시각(0~23) |
+| `transaction_hour` | `int` | `transactionDate` 에서 추출한 시각(0~23) — **KST 기준** |
 | `transaction_dow` | `int` | 요일 (0=월요일 ~ 6=일요일) |
-| `is_night` | `bool` | 새벽 시간대(0~5시) 여부 |
+| `is_night` | `bool` | 새벽 시간대(0~5시) 여부 — **KST 기준** |
 
 ```python
 df["transactionDate"] = pd.to_datetime(df["transactionDate"], utc=True)
+# UTC → KST(Asia/Seoul, UTC+9) 변환: .dt.hour가 한국 현지시각 기준이 되도록 한다.
+df["transactionDate"] = df["transactionDate"].dt.tz_convert("Asia/Seoul")
 df["transaction_hour"] = df["transactionDate"].dt.hour
 df["transaction_dow"]  = df["transactionDate"].dt.dayofweek
 df["is_night"]         = df["transaction_hour"].isin(NIGHT_HOURS)
@@ -53,17 +58,21 @@ df["is_night"]         = df["transaction_hour"].isin(NIGHT_HOURS)
 
 ### 더미 규칙 엔진 (`_apply_rules`)
 
-| 우선순위 | 판별 조건 | `isFraud` | `fraudScore` |
-|---|---|---|---|
-| 1순위 | `amount ≥ 5,000` | `True` | 0.50 ~ 0.95 (금액에 비례) |
-| 2순위 | 새벽(0~5시) + 고위험 업종 | `True` | 0.82 |
-| 기본 | 해당 없음 | `False` | 0.05 |
+> **2026-08-18 변경**: `isFraud` 필드를 제거하고 `riskScore`를 **0.0 ~ 100.0** 스케일로 통일.  
+> Spring `FraudResultDto` 스펙에 맞춘 변경.
+
+| 우선순위 | 판별 조건 | `riskScore` |
+|---|---|---|
+| 1순위 | `amount ≥ 5,000` | 50.0 ~ 95.0 (금액에 비례) |
+| 2순위 | 새벽(0~5시) + 고위험 업종 | 82.0 |
+| 기본 | 해당 없음 | 5.0 |
 
 고위험 업종 목록: `gambling`, `crypto`, `adult`, `atm_withdrawal`
 
-금액 기반 스코어 계산식:
+금액 기반 스코어 계산식 (0~1 내부 계산 후 ×100):
 ```python
-score = min(0.5 + (amount - 5000) / 5000 * 0.4, 0.95)
+raw   = min(0.5 + (amount - 5000) / 5000 * 0.4, 0.95)
+score = round(raw * 100, 2)  # 0~1 → 0~100
 ```
 
 ### 공개 인터페이스
@@ -71,12 +80,11 @@ score = min(0.5 + (amount - 5000) / 5000 * 0.4, 0.95)
 ```python
 def analyze_fraud_risk(data: PaymentLogInput) -> FraudResultOutput:
     df = _preprocess(data)
-    is_fraud, score, reason = _apply_rules(df)
+    score, reason = _apply_rules(df)       # isFraud 제거, riskScore 0~100
     return FraudResultOutput(
         transactionId=data.transactionId,
-        isFraud=is_fraud,
-        fraudScore=score,
-        reason=reason,
+        riskScore=score,
+        fraudReason=reason,
     )
 ```
 
@@ -138,10 +146,10 @@ fds-python-server/
 
 ```python
 # Step 4: 모델 추론으로 교체할 위치
-features = build_feature_matrix(df)
-score    = model.predict_proba(features)[0][1]
-is_fraud = score >= FRAUD_THRESHOLD
-return is_fraud, round(score, 4), "모델 추론 결과"
+features  = build_feature_matrix(df)
+raw_score = model.predict_proba(features)[0][1]   # 0.0 ~ 1.0
+score     = round(raw_score * 100, 2)              # 0.0 ~ 100.0 (Spring 스펙)
+return score, "모델 추론 결과"
 ```
 
 `analyze_fraud_risk()` 의 시그니처와 반환 타입(`FraudResultOutput`)은 변경 없이 유지되므로  

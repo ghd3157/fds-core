@@ -45,6 +45,8 @@ def _preprocess(data: PaymentLogInput) -> pd.DataFrame:
     }])
 
     df["transactionDate"] = pd.to_datetime(df["transactionDate"], utc=True)
+    # UTC → KST(Asia/Seoul, UTC+9) 변환: .dt.hour가 한국 현지시각 기준이 되도록 한다.
+    df["transactionDate"] = df["transactionDate"].dt.tz_convert("Asia/Seoul")
     df["transaction_hour"] = df["transactionDate"].dt.hour
     df["transaction_dow"]  = df["transactionDate"].dt.dayofweek
     df["is_night"]         = df["transaction_hour"].isin(NIGHT_HOURS)
@@ -56,21 +58,23 @@ def _preprocess(data: PaymentLogInput) -> pd.DataFrame:
 # 더미 규칙 엔진 (Step 4: 이 블록을 모델 추론으로 교체)
 # --------------------------------------------------------------------------- #
 
-def _apply_rules(df: pd.DataFrame) -> tuple[bool, float, str]:
-    """규칙 기반으로 (isFraud, fraudScore, reason) 을 반환한다.
+def _apply_rules(df: pd.DataFrame) -> tuple[float, str]:
+    """규칙 기반으로 (riskScore, fraudReason) 을 반환한다.
 
+    riskScore는 Spring 스펙에 맞춰 0.0 ~ 100.0 스케일로 반환한다.
     우선순위: 높은 금액 > 새벽 고위험 업종 > 정상
     """
     row = df.iloc[0]
 
     if row["amount"] >= HIGH_AMOUNT_THRESHOLD:
-        score  = min(0.5 + (row["amount"] - HIGH_AMOUNT_THRESHOLD) / HIGH_AMOUNT_THRESHOLD * 0.4, 0.95)
-        return True, round(score, 4), f"High amount: {row['amount']:.2f}"
+        raw   = min(0.5 + (row["amount"] - HIGH_AMOUNT_THRESHOLD) / HIGH_AMOUNT_THRESHOLD * 0.4, 0.95)
+        score = round(raw * 100, 2)  # 0~1 → 0~100
+        return score, f"High amount: {row['amount']:.2f}"
 
     if row["is_night"] and row["merchantCategory"] in HIGH_RISK_NIGHT_CATEGORIES:
-        return True, 0.82, f"Night-hour transaction in high-risk category: {row['merchantCategory']}"
+        return 82.0, f"Night-hour transaction in high-risk category: {row['merchantCategory']}"
 
-    return False, 0.05, "Normal transaction"
+    return 5.0, "Normal transaction"
 
 
 # --------------------------------------------------------------------------- #
@@ -85,16 +89,15 @@ def analyze_fraud_risk(data: PaymentLogInput) -> FraudResultOutput:
         df 를 feature matrix로 변환하여 model.predict() 를 호출한다.
     """
     df = _preprocess(data)
-    is_fraud, score, reason = _apply_rules(df)
+    score, reason = _apply_rules(df)
 
     logger.info(
-        "Fraud analysis done - transactionId=%s isFraud=%s score=%.4f reason=%r",
-        data.transactionId, is_fraud, score, reason,
+        "Fraud analysis done - transactionId=%s riskScore=%.2f reason=%r",
+        data.transactionId, score, reason,
     )
 
     return FraudResultOutput(
         transactionId=data.transactionId,
-        isFraud=is_fraud,
-        fraudScore=score,
-        reason=reason,
+        riskScore=score,
+        fraudReason=reason,
     )
