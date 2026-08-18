@@ -60,12 +60,14 @@ public class FraudProcessService {
             redisTemplate.opsForValue().increment(REDIS_KEY_PREFIX + today + ":fraud");
 
             // WebSocket: 실시간 알림 브로드캐스트
+            log.info("🚨 [FraudProcess] WebSocket 알림 전송 시작 | transactionId={} | riskScore={}", dto.getTransactionId(), dto.getRiskScore());
             alertNotificationService.sendAlert(new AlertPayload(
                     dto.getTransactionId(),
                     dto.getRiskScore(),
                     dto.getFraudReason(),
                     LocalDateTime.now()
             ));
+            log.info("✅ [FraudProcess] WebSocket 알림 전송 완료 | transactionId={}", dto.getTransactionId());
         } else {
             // Redis: 정상 건수 증가
             redisTemplate.opsForValue().increment(REDIS_KEY_PREFIX + today + ":normal");
