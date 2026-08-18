@@ -1,37 +1,90 @@
-### 1. 로그 수집 API 테스트 (Kafka 전송 및 DB 저장 검증)
-### 1. 정상 결제 로그 전송 (금액 소액 랜덤, 현재 시간 자동 갱신)
+### ══════════════════════════════════════════════════════════════════
+### 이상탐지(Fraud) 파이프라인 통합 테스트
+### 실행 전제: Spring 서버 + Python AI 서버 + Kafka + MariaDB 모두 기동 중
+### transactionId는 매 실행마다 $uuid로 고유 생성됩니다.
+### ══════════════════════════════════════════════════════════════════
+
+### TC-01. 정상 거래 → riskScore=5.0, fraud_alert 저장 X
+### 기대: transaction_log status=COMPLETE, fraud_alert 레코드 없음
 POST http://localhost:8080/api/v1/logs
 Content-Type: application/json
 
 {
-  "transactionId": "normal-{{$uuid}}",
+  "transactionId": "tc01-normal-{{$uuid}}",
   "userId": "user-{{$random.integer(1000, 9999)}}",
-  "amount": {{$random.integer(10, 50)}},
-  "merchantCategory": "grocery_pos",
+  "amount": {{$random.integer(100, 4999)}},
+  "merchantCategory": "food",
   "transactionDate": "{{$isoTimestamp}}",
-  "latitude": 48.8878,
-  "longitude": -118.2105
+  "latitude": 37.5665,
+  "longitude": 126.9780
 }
 
-### 2. 이상 탐지(Fraud) 테스트용 결제 전송 (초고액 랜덤, 현재 시간 자동 갱신)
-< {%
-    // 자바스크립트를 이용해 약간의 로직을 섞을 수도 있습니다.
-    // 예: 새벽 3시로 고정된 비정상적인 시간을 만들고 싶을 때
-    let d = new Date();
-    d.setHours(3, 0, 0, 0);
-    request.variables.set("fraudTime", d.toISOString().split('.')[0]);
-%}
+###
+
+### TC-02. 고액 거래 → riskScore=90.0, fraud_alert 저장 O
+### 기대: transaction_log status=COMPLETE, fraud_alert 레코드 생성, WebSocket 알림 수신
 POST http://localhost:8080/api/v1/logs
 Content-Type: application/json
 
 {
-  "transactionId": "fraud-{{$uuid}}",
+  "transactionId": "tc02-fraud-amount-{{$uuid}}",
   "userId": "user-{{$random.integer(1000, 9999)}}",
-  "amount": {{$random.integer(5000, 10000)}},
-  "merchantCategory": "entertainment",
-  "transactionDate": "{{fraudTime}}",
-  "latitude": 48.8878,
-  "longitude": -118.2105
+  "amount": {{$random.integer(8750, 15000)}},
+  "merchantCategory": "electronics",
+  "transactionDate": "{{$isoTimestamp}}",
+  "latitude": 37.5665,
+  "longitude": 126.9780
+}
+
+###
+
+### TC-03. 새벽 고위험 업종(gambling) → riskScore=82.0, fraud_alert 저장 O
+### 기대: transaction_log status=COMPLETE, fraud_alert 레코드 생성, WebSocket 알림 수신
+POST http://localhost:8080/api/v1/logs
+Content-Type: application/json
+
+{
+  "transactionId": "tc03-fraud-night-{{$uuid}}",
+  "userId": "user-{{$random.integer(1000, 9999)}}",
+  "amount": {{$random.integer(100, 4999)}},
+  "merchantCategory": "gambling",
+  "transactionDate": "2026-08-18T02:30:00+09:00",
+  "latitude": 37.5665,
+  "longitude": 126.9780
+}
+
+###
+
+### TC-04. 새벽이지만 일반 업종(food) → riskScore=5.0, fraud_alert 저장 X
+### 기대: transaction_log status=COMPLETE, fraud_alert 레코드 없음
+POST http://localhost:8080/api/v1/logs
+Content-Type: application/json
+
+{
+  "transactionId": "tc04-normal-night-{{$uuid}}",
+  "userId": "user-{{$random.integer(1000, 9999)}}",
+  "amount": {{$random.integer(100, 4999)}},
+  "merchantCategory": "food",
+  "transactionDate": "{{$isoTimestamp}}",
+  "latitude": 37.5665,
+  "longitude": 126.9780
+}
+
+###
+
+### TC-05. 경계값 — 고액(8000) + 새벽 고위험 업종(crypto), 고액 규칙 우선 적용
+### 기대: riskScore=76.0 (80 미만) → fraud_alert 저장 X, 새벽 crypto 조건 무시됨
+POST http://localhost:8080/api/v1/logs
+Content-Type: application/json
+
+{
+  "transactionId": "tc05-boundary-{{$uuid}}",
+  "userId": "user-{{$random.integer(1000, 9999)}}",
+  "amount": {{$random.integer(5000, 8749)}},
+  "merchantCategory": "crypto",
+  "transactionDate": "{{$isoTimestamp}}",
+  "latitude": 37.5665,
+  "longitude": 126.9780
 }
 
 ###
