@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZoneId;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -18,6 +20,7 @@ public class LogIngestionService {
 
     @Transactional
     public void ingest(PaymentLogRequestDto dto) {
+        // OffsetDateTime → KST LocalDateTime 변환 후 DB 저장
         TransactionLog log = TransactionLog.builder()
                 .transactionId(dto.getTransactionId())
                 .userId(dto.getUserId())
@@ -25,7 +28,9 @@ public class LogIngestionService {
                 .merchantCategory(dto.getMerchantCategory())
                 .latitude(dto.getLatitude())
                 .longitude(dto.getLongitude())
-                .transactionDate(dto.getTransactionDate())
+                .transactionDate(dto.getTransactionDate()
+                        .atZoneSameInstant(ZoneId.of("Asia/Seoul"))
+                        .toLocalDateTime())
                 .status(TransactionLog.ProcessStatus.PENDING)
                 .build();
 

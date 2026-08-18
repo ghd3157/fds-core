@@ -4,7 +4,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Getter
 @NoArgsConstructor
@@ -15,5 +15,5 @@ public class PaymentLogRequestDto {
     private String merchantCategory;
     private Double latitude;
     private Double longitude;
-    private LocalDateTime transactionDate;
+    private OffsetDateTime transactionDate;
 }
