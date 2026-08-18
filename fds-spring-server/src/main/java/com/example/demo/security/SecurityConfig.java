@@ -35,9 +35,10 @@ public class SecurityConfig {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authorizeHttpRequests(auth -> auth
-                    .requestMatchers("/api/auth/**").permitAll()       // 로그인은 인증 없이 허용
-                    .requestMatchers("/api/v1/logs").permitAll()       // 외부 결제 로그 수집 허용
+                    .requestMatchers("/api/auth/**").permitAll()         // 로그인은 인증 없이 허용
+                    .requestMatchers("/api/v1/logs").permitAll()         // 외부 결제 로그 수집 허용
                     .requestMatchers("/api/v1/dashboard/**").permitAll() // 🚨 임시로 대시보드 접근 허용!
+                    .requestMatchers("/ws-fds/**").permitAll()           // WebSocket 핸드쉐이크 인증 제외 (JWT 필터 차단 방지)
                     .anyRequest().authenticated()                        // 나머지는 인증 필요
             )
             .addFilterBefore(
