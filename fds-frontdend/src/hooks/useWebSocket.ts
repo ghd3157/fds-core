@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import SockJS from 'sockjs-client'
 import { Client, type IMessage } from '@stomp/stompjs'
 
-const WS_URL = 'http://localhost:8080/ws'
-const TOPIC = '/topic/fraud-alerts'
+const WS_URL = 'http://localhost:8080/ws-fds'
+const TOPIC = '/topic/alerts'
 
 export interface FraudAlert {
   transactionId: string
