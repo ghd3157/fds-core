@@ -1,103 +1,132 @@
 """
-fraud_detector.py — Step 3: 전처리 파이프라인 & 더미 AI 추론
+fraud_detector.py — 3-Layer 하이브리드 이상 탐지 오케스트레이터
 
-[Step 4] 실제 ML/DL 모델 연동 시 analyze_fraud_risk() 내부만 교체하면 된다.
+FDS-DESIGN.md Section 5.5 기준:
+- Layer 0: Redis ZSET 실시간 사용자 결제빈도 (1m / 10m / 1h, 이동거리 제외)
+- Layer 1: 명시적 정책 룰 엔진 (R1~R4)
+- Layer 2: LightGBM 실시간 추론 + TreeSHAP 기여 피처 사유 생성
+- Layer 3: Hybrid Score 결합 (final = max(ruleScore, mlScore), threshold = 80.0)
 """
 import logging
+from datetime import datetime
+from typing import Literal
 
-import pandas as pd
-
+from app.config import settings
+from app.feature_store import RedisFeatureStore
+from app.features import NIGHT_HOURS, KST, build_online_feature_frame, parse_to_kst
+from app.model_service import LightGBMModelService
+from app.rule_engine import evaluate_rules
 from app.schemas import FraudResultOutput, PaymentLogInput
 
 logger = logging.getLogger(__name__)
 
-# --------------------------------------------------------------------------- #
-# 규칙 기반 임계값 (Step 4에서 모델로 대체)
-# --------------------------------------------------------------------------- #
-
-HIGH_AMOUNT_THRESHOLD = 5_000.0          # 이 금액 이상이면 고위험으로 분류
-NIGHT_HOURS = set(range(0, 6))           # 새벽 0~5시
-HIGH_RISK_NIGHT_CATEGORIES = {           # 새벽 시간대에 고위험으로 분류할 업종
-    "gambling", "crypto", "adult", "atm_withdrawal",
-}
+DetectionSource = Literal["RULE", "ML", "HYBRID", "NONE"]
 
 
-# --------------------------------------------------------------------------- #
-# 전처리
-# --------------------------------------------------------------------------- #
+class HybridFraudDetector:
+    def __init__(
+        self,
+        feature_store: RedisFeatureStore | None = None,
+        model_service: LightGBMModelService | None = None,
+        threshold: float | None = None,
+    ):
+        self.feature_store = feature_store or RedisFeatureStore()
+        self.model_service = model_service or LightGBMModelService()
+        self.threshold = threshold if threshold is not None else settings.fraud_threshold
 
-def _preprocess(data: PaymentLogInput) -> pd.DataFrame:
-    """PaymentLogInput → Pandas DataFrame 변환 및 파생 변수 생성.
+    def initialize(self) -> None:
+        self.model_service.load()
 
-    생성되는 파생 컬럼:
-        - transaction_hour  : 거래 시각(시)
-        - transaction_dow   : 거래 요일(0=월 ~ 6=일)
-        - is_night          : 새벽(0~5시) 여부
-    """
-    df = pd.DataFrame([{
-        "transactionId":    data.transactionId,
-        "userId":           data.userId,
-        "amount":           data.amount,
-        "merchantCategory": data.merchantCategory.lower().strip(),
-        "transactionDate":  data.transactionDate,
-        "latitude":         data.latitude,
-        "longitude":        data.longitude,
-    }])
+    def close(self) -> None:
+        self.feature_store.close()
 
-    df["transactionDate"] = pd.to_datetime(df["transactionDate"], utc=True)
-    # UTC → KST(Asia/Seoul, UTC+9) 변환: .dt.hour가 한국 현지시각 기준이 되도록 한다.
-    df["transactionDate"] = df["transactionDate"].dt.tz_convert("Asia/Seoul")
-    df["transaction_hour"] = df["transactionDate"].dt.hour
-    df["transaction_dow"]  = df["transactionDate"].dt.dayofweek
-    df["is_night"]         = df["transaction_hour"].isin(NIGHT_HOURS)
+    def analyze(self, data: PaymentLogInput) -> FraudResultOutput:
+        tx_kst = parse_to_kst(data.transactionDate)
+        tx_epoch = tx_kst.timestamp()
 
-    return df
+        # 1. Redis 실시간 결제빈도 조회 및 기록 (1m / 10m / 1h)
+        velocity = self.feature_store.record_and_get_velocity(
+            user_id=data.userId,
+            transaction_id=data.transactionId,
+            tx_epoch_seconds=tx_epoch,
+        )
 
+        # 2. 공용 전처리 (12개 피처)
+        feature_df = build_online_feature_frame(
+            data=data,
+            tx_kst=tx_kst,
+            tx_count_1m=velocity.tx_count_1m,
+            tx_count_10m=velocity.tx_count_10m,
+            tx_count_1h=velocity.tx_count_1h,
+            vocab=self.model_service.category_vocab,
+        )
 
-# --------------------------------------------------------------------------- #
-# 더미 규칙 엔진 (Step 4: 이 블록을 모델 추론으로 교체)
-# --------------------------------------------------------------------------- #
+        # 3. Layer 1 — Rule Engine 평가
+        is_night = tx_kst.hour in NIGHT_HOURS
+        rule_eval = evaluate_rules(
+            amount=data.amount,
+            merchant_category=data.merchantCategory,
+            is_night=is_night,
+            tx_count_1m=velocity.tx_count_1m,
+            tx_count_10m=velocity.tx_count_10m,
+        )
 
-def _apply_rules(df: pd.DataFrame) -> tuple[float, str]:
-    """규칙 기반으로 (riskScore, fraudReason) 을 반환한다.
+        # 4. Layer 2 — LightGBM 추론 (모델 미로드 시 None Fallback)
+        ml_pred = self.model_service.predict(feature_df)
 
-    riskScore는 Spring 스펙에 맞춰 0.0 ~ 100.0 스케일로 반환한다.
-    우선순위: 높은 금액 > 새벽 고위험 업종 > 정상
-    """
-    row = df.iloc[0]
+        # 5. Layer 3 — Hybrid 결합 정책
+        rule_score = rule_eval.score
+        ml_score = ml_pred.score
+        final_score = round(max(rule_score or 0.0, ml_score or 0.0), 2)
 
-    if row["amount"] >= HIGH_AMOUNT_THRESHOLD:
-        raw   = min(0.5 + (row["amount"] - HIGH_AMOUNT_THRESHOLD) / HIGH_AMOUNT_THRESHOLD * 0.4, 0.95)
-        score = round(raw * 100, 2)  # 0~1 → 0~100
-        return score, f"High amount: {row['amount']:.2f}"
+        rule_hit = rule_score is not None and rule_score >= self.threshold
+        ml_hit = ml_score is not None and ml_score >= self.threshold
 
-    if row["is_night"] and row["merchantCategory"] in HIGH_RISK_NIGHT_CATEGORIES:
-        return 82.0, f"Night-hour transaction in high-risk category: {row['merchantCategory']}"
+        if rule_hit and ml_hit:
+            source: DetectionSource = "HYBRID"
+        elif rule_hit:
+            source = "RULE"
+        elif ml_hit:
+            source = "ML"
+        else:
+            source = "NONE"
 
-    return 5.0, "Normal transaction"
+        reason = self._build_reason(source, rule_eval.reasons, ml_pred.reason)
+        analyzed_at = datetime.now(KST).isoformat(timespec="milliseconds")
 
+        logger.info(
+            "Fraud analysis complete | txId=%s | risk=%.2f | rule=%s | ml=%s | source=%s | vel=%d/%d/%d",
+            data.transactionId, final_score, rule_score, ml_score, source,
+            velocity.tx_count_1m, velocity.tx_count_10m, velocity.tx_count_1h,
+        )
 
-# --------------------------------------------------------------------------- #
-# 공개 인터페이스 — kafka_client.py 에서 호출
-# --------------------------------------------------------------------------- #
+        return FraudResultOutput(
+            transactionId=data.transactionId,
+            riskScore=final_score,
+            ruleScore=rule_score,
+            mlScore=ml_score,
+            detectionSource=source,
+            detectionReason=reason,
+            txCount1m=velocity.tx_count_1m,
+            txCount10m=velocity.tx_count_10m,
+            txCount1h=velocity.tx_count_1h,
+            analyzedAt=analyzed_at,
+        )
 
-def analyze_fraud_risk(data: PaymentLogInput) -> FraudResultOutput:
-    """결제 로그를 전처리 → 규칙 적용 → FraudResultOutput 반환.
+    def _build_reason(
+        self,
+        source: DetectionSource,
+        rule_reasons: list[str],
+        ml_reason: str | None,
+    ) -> str:
+        parts: list[str] = []
+        if rule_reasons:
+            parts.append(f"[RULE] {', '.join(rule_reasons)}")
+        if source in ("ML", "HYBRID") and ml_reason:
+            parts.append(f"[ML] {ml_reason}")
 
-    Step 4 연동 포인트:
-        _apply_rules() 를 모델 추론 함수로 교체하거나,
-        df 를 feature matrix로 변환하여 model.predict() 를 호출한다.
-    """
-    df = _preprocess(data)
-    score, reason = _apply_rules(df)
+        if not parts:
+            return "정상 거래"
 
-    logger.info(
-        "Fraud analysis done - transactionId=%s riskScore=%.2f reason=%r",
-        data.transactionId, score, reason,
-    )
-
-    return FraudResultOutput(
-        transactionId=data.transactionId,
-        riskScore=score,
-        fraudReason=reason,
-    )
+        joined = " | ".join(parts)
+        return joined[:500]
