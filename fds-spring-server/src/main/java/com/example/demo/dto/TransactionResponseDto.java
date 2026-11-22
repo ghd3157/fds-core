@@ -1,5 +1,6 @@
 package com.example.demo.dto;
 
+import com.example.demo.domain.FraudAlert;
 import com.example.demo.domain.TransactionLog;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
@@ -14,30 +15,35 @@ public class TransactionResponseDto {
 
     private Long id;
     private String transactionId;
+    private String userId;
     private BigDecimal amount;
-    private String category;
+    private String merchantCategory;
+    private Double latitude;
+    private Double longitude;
     private String status;
 
-    /** primitive boolean + Lombok @Getter → Jackson이 'fraud'로 직렬화하는 문제 방지 */
     @JsonProperty("isFraud")
     private boolean isFraud;
 
+    private Double riskScore;
+    private String detectionSource;
+    private String reviewStatus;
     private LocalDateTime createdAt;
 
-    /**
-     * TransactionLog 엔티티와 isFraud 여부를 받아 DTO 변환
-     *
-     * @param log     TransactionLog 엔티티
-     * @param isFraud 해당 거래에 FraudAlert가 존재하는지 여부
-     */
-    public static TransactionResponseDto of(TransactionLog log, boolean isFraud) {
+    public static TransactionResponseDto of(TransactionLog log, FraudAlert alert) {
         return TransactionResponseDto.builder()
                 .id(log.getId())
                 .transactionId(log.getTransactionId())
+                .userId(log.getUserId())
                 .amount(log.getAmount())
-                .category(log.getMerchantCategory())
+                .merchantCategory(log.getMerchantCategory())
+                .latitude(log.getLatitude())
+                .longitude(log.getLongitude())
                 .status(log.getStatus().name())
-                .isFraud(isFraud)
+                .isFraud(alert != null)
+                .riskScore(alert != null ? alert.getRiskScore() : null)
+                .detectionSource(alert != null ? alert.getDetectionSource().name() : null)
+                .reviewStatus(alert != null ? alert.getReviewStatus().name() : null)
                 .createdAt(log.getTransactionDate())
                 .build();
     }

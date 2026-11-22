@@ -1,147 +1,117 @@
 ### ══════════════════════════════════════════════════════════════════
-### 이상탐지(Fraud) 파이프라인 통합 테스트
-### 실행 전제: Spring 서버 + Python AI 서버 + Kafka + MariaDB 모두 기동 중
-### transactionId는 매 실행마다 $uuid로 고유 생성됩니다.
+### FDS v2.0 통합 API 테스트 (FDS-DESIGN.md 기준)
+### 실행 전제: MariaDB + Redis + Kafka + Spring Boot + Python AI 서버 기동 중
 ### ══════════════════════════════════════════════════════════════════
 
-### TC-01. 정상 거래 → riskScore=5.0, fraud_alert 저장 X
-### 기대: transaction_log status=COMPLETE, fraud_alert 레코드 없음
-POST http://localhost:8080/api/v1/logs
-Content-Type: application/json
+@baseUrl = http://localhost:8080/api/v1
+@apiKey = fds-demo-api-key-change-me
 
-{
-  "transactionId": "tc01-normal-{{$uuid}}",
-  "userId": "user-{{$random.integer(1000, 9999)}}",
-  "amount": {{$random.integer(100, 4999)}},
-  "merchantCategory": "food",
-  "transactionDate": "{{$isoTimestamp}}",
-  "latitude": 37.5665,
-  "longitude": 126.9780
-}
-
-###
-
-### TC-02. 고액 거래 → riskScore=90.0, fraud_alert 저장 O
-### 기대: transaction_log status=COMPLETE, fraud_alert 레코드 생성, WebSocket 알림 수신
-POST http://localhost:8080/api/v1/logs
-Content-Type: application/json
-
-{
-  "transactionId": "tc02-fraud-amount-{{$uuid}}",
-  "userId": "user-{{$random.integer(1000, 9999)}}",
-  "amount": {{$random.integer(8750, 15000)}},
-  "merchantCategory": "electronics",
-  "transactionDate": "{{$isoTimestamp}}",
-  "latitude": 37.5665,
-  "longitude": 126.9780
-}
-
-###
-
-### TC-03. 새벽 고위험 업종(gambling) → riskScore=82.0, fraud_alert 저장 O
-### 기대: transaction_log status=COMPLETE, fraud_alert 레코드 생성, WebSocket 알림 수신
-POST http://localhost:8080/api/v1/logs
-Content-Type: application/json
-
-{
-  "transactionId": "tc03-fraud-night-{{$uuid}}",
-  "userId": "user-{{$random.integer(1000, 9999)}}",
-  "amount": {{$random.integer(100, 4999)}},
-  "merchantCategory": "gambling",
-  "transactionDate": "2026-08-18T02:30:00+09:00",
-  "latitude": 37.5665,
-  "longitude": 126.9780
-}
-
-###
-
-### TC-04. 새벽이지만 일반 업종(food) → riskScore=5.0, fraud_alert 저장 X
-### 기대: transaction_log status=COMPLETE, fraud_alert 레코드 없음
-POST http://localhost:8080/api/v1/logs
-Content-Type: application/json
-
-{
-  "transactionId": "tc04-normal-night-{{$uuid}}",
-  "userId": "user-{{$random.integer(1000, 9999)}}",
-  "amount": {{$random.integer(100, 4999)}},
-  "merchantCategory": "food",
-  "transactionDate": "{{$isoTimestamp}}",
-  "latitude": 37.5665,
-  "longitude": 126.9780
-}
-
-###
-
-### TC-05. 경계값 — 고액(8000) + 새벽 고위험 업종(crypto), 고액 규칙 우선 적용
-### 기대: riskScore=76.0 (80 미만) → fraud_alert 저장 X, 새벽 crypto 조건 무시됨
-POST http://localhost:8080/api/v1/logs
-Content-Type: application/json
-
-{
-  "transactionId": "tc05-boundary-{{$uuid}}",
-  "userId": "user-{{$random.integer(1000, 9999)}}",
-  "amount": {{$random.integer(5000, 8749)}},
-  "merchantCategory": "crypto",
-  "transactionDate": "{{$isoTimestamp}}",
-  "latitude": 37.5665,
-  "longitude": 126.9780
-}
-
-###
-
-### 3. 대시보드 통계 조회 API 테스트 (Redis 연동 검증)
-GET http://localhost:8080/api/v1/dashboard/stats
-Accept: application/json
-
-###
-
-### 4. 이상 탐지 내역 조회 API 테스트 (JPA 페이징 검증)
-GET http://localhost:8080/api/v1/dashboard/history?page=0&size=10
-Accept: application/json
-
-###
-
-### ── 신규 API 테스트 ──────────────────────────────────────────────
-### ※ /api/v1/transactions, /api/v1/stats/* 는 JWT 인증이 필요합니다.
-###   아래 순서대로 실행하세요: [5. 로그인] → 토큰 복사 → [6·7·8 테스트]
-
-### 5. 로그인 (JWT 토큰 자동 저장)
-POST http://localhost:8080/api/auth/login
+### 1. 관리자 로그인 (Access / Refresh Token 자동 저장)
+POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
   "username": "admin",
-  "password": "1234"
+  "password": "admin1234!"
 }
 
 > {%
-    client.global.set("jwt_token", response.body.accessToken);
-    client.log("✅ 토큰 저장 완료: " + response.body.accessToken);
+    client.global.set("access_token", response.body.accessToken);
+    client.global.set("refresh_token", response.body.refreshToken);
 %}
 
-###
+### 2. 현재 로그인 사용자 정보 조회
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{access_token}}
 
-### 6. 거래 내역 페이징 조회
-### GET /api/v1/transactions?page=0&size=10
-### → isFraud 포함한 Spring Page 형식으로 반환
-GET http://localhost:8080/api/v1/transactions?page=0&size=10
-Accept: application/json
-Authorization: Bearer {{jwt_token}}
+### 3. 토큰 재발급 (Refresh Token Rotation)
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
 
-###
+{
+  "refreshToken": "{{refresh_token}}"
+}
 
-### 7. 요약 통계 조회
-### GET /api/v1/stats/summary
-### → todayFraudCount(Redis), pendingCount, completeCount(DB)
-GET http://localhost:8080/api/v1/stats/summary
-Accept: application/json
-Authorization: Bearer {{jwt_token}}
+> {%
+    client.global.set("access_token", response.body.accessToken);
+    client.global.set("refresh_token", response.body.refreshToken);
+%}
 
-###
+### 4. 정상 결제 로그 수집 (KRW 45,000원, X-API-Key 필수)
+POST {{baseUrl}}/logs
+Content-Type: application/json
+X-API-Key: {{apiKey}}
 
-### 8. 카테고리별 사기 탐지 건수 조회
-### GET /api/v1/stats/fraud-by-category
-### → [{ "category": "grocery_pos", "count": 42 }, ...]
-GET http://localhost:8080/api/v1/stats/fraud-by-category
-Accept: application/json
-Authorization: Bearer {{jwt_token}}
+{
+  "transactionId": "tc01-normal-{{$uuid}}",
+  "userId": "user-1001",
+  "amount": 45000,
+  "merchantCategory": "grocery_pos",
+  "transactionDate": "{{$isoTimestamp}}",
+  "latitude": 37.5665,
+  "longitude": 126.9780
+}
+
+### 5. 고액 이상 결제 로그 수집 (KRW 1,850,000원 → R3_HIGH_AMOUNT)
+POST {{baseUrl}}/logs
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "transactionId": "tc02-high-amount-{{$uuid}}",
+  "userId": "user-1002",
+  "amount": 1850000,
+  "merchantCategory": "shopping_net",
+  "transactionDate": "{{$isoTimestamp}}",
+  "latitude": 37.5665,
+  "longitude": 126.9780
+}
+
+### 6. 새벽 고위험 업종 결제 (KRW 450,000원, 02:30 KST → R4_NIGHT_HIGH_RISK)
+POST {{baseUrl}}/logs
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "transactionId": "tc03-night-risk-{{$uuid}}",
+  "userId": "user-1003",
+  "amount": 450000,
+  "merchantCategory": "gambling",
+  "transactionDate": "2026-11-22T02:30:00+09:00",
+  "latitude": 37.5665,
+  "longitude": 126.9780
+}
+
+### 7. 대시보드 KPI 요약 조회
+GET {{baseUrl}}/dashboard/summary
+Authorization: Bearer {{access_token}}
+
+### 8. 최근 24시간 시간대별 트래픽 조회
+GET {{baseUrl}}/dashboard/hourly-traffic
+Authorization: Bearer {{access_token}}
+
+### 9. 카테고리별 사기 건수 집계 조회
+GET {{baseUrl}}/dashboard/fraud-by-category
+Authorization: Bearer {{access_token}}
+
+### 10. 거래 내역 필터·검색·페이징 조회
+GET {{baseUrl}}/transactions?page=0&size=10&isFraud=true
+Authorization: Bearer {{access_token}}
+
+### 11. 이상 탐지 알람 목록 조회 (미확인 필터)
+GET {{baseUrl}}/alerts?page=0&size=20&reviewStatus=UNCONFIRMED
+Authorization: Bearer {{access_token}}
+
+### 12. 알람 사기 확정 처리 (ROLE_ADMIN 전용)
+PATCH {{baseUrl}}/alerts/1/review
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "reviewStatus": "CONFIRMED_FRAUD",
+  "reviewNote": "카드 소유주 확인 결과 도용 거래로 확정"
+}
+
+### 13. 로그아웃 (Refresh 삭제 + Access 블랙리스트)
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{access_token}}

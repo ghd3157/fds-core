@@ -1,17 +1,16 @@
 package com.example.demo.controller;
 
-import com.example.demo.dto.DashboardStatsResponseDto;
-import com.example.demo.dto.FraudHistoryResponseDto;
+import com.example.demo.dto.CategoryStatDto;
+import com.example.demo.dto.DashboardSummaryResponseDto;
+import com.example.demo.dto.HourlyTrafficDto;
 import com.example.demo.service.DashboardService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/dashboard")
@@ -20,24 +19,21 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
-    /**
-     * 오늘 날짜 기준 정상/이상 결제 통계 조회
-     * GET /api/v1/dashboard/stats
-     */
-    @GetMapping("/stats")
-    public ResponseEntity<DashboardStatsResponseDto> getStats() {
-        return ResponseEntity.ok(dashboardService.getStats());
+    /** 상단 KPI 요약 통계 (오늘 사기/정상/비율, 미확인 알람, PENDING/COMPLETE) */
+    @GetMapping("/summary")
+    public ResponseEntity<DashboardSummaryResponseDto> getSummary() {
+        return ResponseEntity.ok(dashboardService.getSummary());
     }
 
-    /**
-     * 이상 탐지 내역 페이징 조회
-     * GET /api/v1/dashboard/history?page=0&size=20&sort=riskScore,desc
-     * GET /api/v1/dashboard/history?page=0&size=20&sort=createdAt,desc
-     */
-    @GetMapping("/history")
-    public ResponseEntity<Page<FraudHistoryResponseDto>> getHistory(
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
-    ) {
-        return ResponseEntity.ok(dashboardService.getHistory(pageable));
+    /** 최근 24시간(KST) 시간대별 정상/사기 트래픽 시계열 */
+    @GetMapping("/hourly-traffic")
+    public ResponseEntity<List<HourlyTrafficDto>> getHourlyTraffic() {
+        return ResponseEntity.ok(dashboardService.getHourlyTraffic());
+    }
+
+    /** MariaDB FraudAlert 기준 카테고리별 사기 건수 집계 */
+    @GetMapping("/fraud-by-category")
+    public ResponseEntity<List<CategoryStatDto>> getFraudByCategory() {
+        return ResponseEntity.ok(dashboardService.getFraudByCategory());
     }
 }
