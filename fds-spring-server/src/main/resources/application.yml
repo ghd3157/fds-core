@@ -5,14 +5,14 @@ spring:
   # 1. MariaDB 연결 설정
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
-    url: jdbc:mariadb://localhost:3306/fds_db
-    username: fds_user
-    password: fdspassword
+    url: ${DB_URL:jdbc:mariadb://localhost:3306/fds_db}
+    username: ${MARIADB_USER:fds_user}
+    password: ${MARIADB_PASSWORD:fdspassword}
 
   jpa:
     hibernate:
-      ddl-auto: update # 엔티티 클래스에 맞게 테이블 자동 생성/수정
-    show-sql: true
+      ddl-auto: update
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -20,27 +20,43 @@ spring:
   # 2. Redis 연결 설정
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
   # 3. Kafka 연결 설정
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
-      group-id: fds-group
+      group-id: fds-spring-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      acks: all          # 모든 ISR 복제본이 수신 확인 후 ack (데이터 유실 방지)
-      retries: 3         # 일시적 오류 시 재시도 횟수
+      acks: all
+      retries: 3
       properties:
-        linger.ms: 0     # 배치 대기 시간 0 → 즉시 전송 (기본값과 동일하나 명시적으로 지정)
+        linger.ms: 5
 
 # JWT 설정
 jwt:
-  secret: "dGhpcyBpcyBhIHNlY3VyZSBzZWNyZXQga2V5IGZvciBmZHMgc3lzdGVt"  # Base64(256-bit) - 운영 시 반드시 교체
-  access-token-expiration-ms: 1800000    # 30분
-  refresh-token-expiration-ms: 604800000 # 7일
+  secret: ${JWT_SECRET:dGhpcyBpcyBhIHNlY3VyZSBzZWNyZXQga2V5IGZvciBmZHMgc3lzdGVt}
+  access-token-expiration-ms: ${JWT_ACCESS_EXP_MS:1800000}     # 30분
+  refresh-token-expiration-ms: ${JWT_REFRESH_EXP_MS:604800000} # 7일
+
+# FDS 도메인 설정
+fds:
+  detection:
+    threshold: ${FDS_FRAUD_THRESHOLD:80.0}
+  topics:
+    payment-log: payment-log-topic
+    fraud-result: fraud-result-topic
+    dlq: fds-dlq-topic
+  security:
+    ingest-api-key: ${FDS_INGEST_API_KEY:fds-demo-api-key-change-me}
+    cors-origins: ${FDS_CORS_ORIGINS:http://localhost:5173}
+    admin-username: ${FDS_ADMIN_USERNAME:admin}
+    admin-password: ${FDS_ADMIN_PASSWORD:admin1234!}
+    viewer-username: ${FDS_VIEWER_USERNAME:viewer}
+    viewer-password: ${FDS_VIEWER_PASSWORD:viewer1234!}

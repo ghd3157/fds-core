@@ -3,6 +3,9 @@ package com.example.demo.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+
 @Entity
 @Table(name = "admin")
 @Getter
@@ -10,6 +13,8 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class Admin {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,10 +28,21 @@ public class Admin {
     @Column(nullable = false)
     private String password;
 
-    /** 권한 (예: ROLE_ADMIN, ROLE_VIEWER) */
+    /** 권한 (ROLE_ADMIN, ROLE_VIEWER) */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Role role;
+
+    /** 계정 생성 시각 (KST) */
+    @Column(nullable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now(KST);
+        }
+    }
 
     public enum Role {
         ROLE_ADMIN, ROLE_VIEWER

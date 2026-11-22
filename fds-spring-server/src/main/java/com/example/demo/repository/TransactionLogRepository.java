@@ -5,16 +5,18 @@ import com.example.demo.domain.TransactionLog.ProcessStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.Optional;
 
-public interface TransactionLogRepository extends JpaRepository<TransactionLog, Long> {
+public interface TransactionLogRepository
+        extends JpaRepository<TransactionLog, Long>, JpaSpecificationExecutor<TransactionLog> {
+
     boolean existsByTransactionId(String transactionId);
+
     Optional<TransactionLog> findByTransactionId(String transactionId);
 
-    /** status별 전체 건수 조회 */
     long countByStatus(ProcessStatus status);
 
-    /** transactionDate 내림차순 페이징 조회 */
     Page<TransactionLog> findAllByOrderByTransactionDateDesc(Pageable pageable);
 }
