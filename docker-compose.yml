@@ -6,21 +6,37 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: fds_db
-      MYSQL_USER: fds_user
-      MYSQL_PASSWORD: fdspassword
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MARIADB_DATABASE:-fds_db}
+      MYSQL_USER: ${MARIADB_USER:-fds_user}
+      MYSQL_PASSWORD: ${MARIADB_PASSWORD:-fdspassword}
+      TZ: Asia/Seoul
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     deploy:
       resources:
         limits:
           memory: 2G
 
-  # 2. Redis (빈번하게 조회되는 데이터 캐싱)
+  # 2. Redis (통계 캐시 · 결제빈도 ZSET 피처 스토어 · JWT 토큰 저장)
   redis:
     image: redis:7.2
     container_name: fds-redis
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     deploy:
       resources:
         limits:
@@ -42,7 +58,21 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
     deploy:
       resources:
         limits:
           memory: 2G
+
+volumes:
+  mariadb_data:
+  redis_data:
+  kafka_data:
