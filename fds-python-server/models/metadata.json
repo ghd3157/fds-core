@@ -1,0 +1,56 @@
+{
+  "model_version": "lgbm-fraud-v1.0",
+  "trained_at": "2026-11-23T00:36:29+09:00",
+  "dataset_source": "synthetic-sparkov-krw:60000",
+  "currency": "KRW",
+  "train_samples": 48000,
+  "test_samples": 12000,
+  "feature_names": [
+    "amount",
+    "log_amount",
+    "merchant_category_id",
+    "tx_hour",
+    "tx_dow",
+    "is_night",
+    "is_weekend",
+    "latitude",
+    "longitude",
+    "tx_count_1m",
+    "tx_count_10m",
+    "tx_count_1h"
+  ],
+  "category_vocab": {
+    "unknown": 0,
+    "grocery_pos": 1,
+    "grocery_net": 2,
+    "shopping_pos": 3,
+    "shopping_net": 4,
+    "misc_pos": 5,
+    "misc_net": 6,
+    "gas_transport": 7,
+    "food_dining": 8,
+    "entertainment": 9,
+    "travel": 10,
+    "health_fitness": 11,
+    "home": 12,
+    "kids_pets": 13,
+    "personal_care": 14,
+    "gambling": 15,
+    "crypto": 16,
+    "adult": 17,
+    "atm_withdrawal": 18
+  },
+  "metrics": {
+    "pr_auc": 0.995,
+    "roc_auc": 0.9998,
+    "f1_at_0_80": 0.9688,
+    "f1_at_0_50": 0.971,
+    "recall_at_fpr_1pct": 0.9955,
+    "confusion_matrix_at_0_80": {
+      "tn": 11769,
+      "fp": 9,
+      "fn": 5,
+      "tp": 217
+    }
+  }
+}
