@@ -8,9 +8,13 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.UUID;
 
 @Component
 public class JwtProvider {
+
+    public static final String TOKEN_TYPE_ACCESS = "ACCESS";
+    public static final String TOKEN_TYPE_REFRESH = "REFRESH";
 
     private final SecretKey secretKey;
     private final long accessTokenExpMs;
@@ -26,27 +30,41 @@ public class JwtProvider {
         this.refreshTokenExpMs = refreshTokenExpMs;
     }
 
-    /** Access Token 발급 */
+    /** Access Token 발급 (jti + type=ACCESS + role 포함) */
     public String generateAccessToken(String username, String role) {
-        return buildToken(username, role, accessTokenExpMs);
+        return buildToken(username, role, TOKEN_TYPE_ACCESS, accessTokenExpMs);
     }
 
-    /** Refresh Token 발급 */
+    /** Refresh Token 발급 (jti + type=REFRESH) */
     public String generateRefreshToken(String username) {
-        return buildToken(username, null, refreshTokenExpMs);
+        return buildToken(username, null, TOKEN_TYPE_REFRESH, refreshTokenExpMs);
     }
 
-    /** 토큰에서 username(subject) 추출 */
     public String getUsername(String token) {
         return parseClaims(token).getSubject();
     }
 
-    /** 토큰에서 role claim 추출 */
     public String getRole(String token) {
         return parseClaims(token).get("role", String.class);
     }
 
-    /** 토큰 유효성 검증 */
+    public String getJti(String token) {
+        return parseClaims(token).getId();
+    }
+
+    public String getTokenType(String token) {
+        return parseClaims(token).get("type", String.class);
+    }
+
+    public long getRemainingExpirationMs(String token) {
+        Date exp = parseClaims(token).getExpiration();
+        return Math.max(0L, exp.getTime() - System.currentTimeMillis());
+    }
+
+    public long getRefreshTokenExpMs() {
+        return refreshTokenExpMs;
+    }
+
     public boolean validate(String token) {
         try {
             parseClaims(token);
@@ -56,12 +74,20 @@ public class JwtProvider {
         }
     }
 
-    // --- private helpers ---
+    public boolean validateAccessToken(String token) {
+        return validate(token) && TOKEN_TYPE_ACCESS.equals(getTokenType(token));
+    }
 
-    private String buildToken(String username, String role, long expMs) {
+    public boolean validateRefreshToken(String token) {
+        return validate(token) && TOKEN_TYPE_REFRESH.equals(getTokenType(token));
+    }
+
+    private String buildToken(String username, String role, String type, long expMs) {
         Date now = new Date();
         JwtBuilder builder = Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(username)
+                .claim("type", type)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expMs))
                 .signWith(secretKey);

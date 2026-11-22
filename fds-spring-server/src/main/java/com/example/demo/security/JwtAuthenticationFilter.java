@@ -17,6 +17,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtProvider jwtProvider;
+    private final TokenStoreService tokenStoreService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -25,23 +26,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = resolveToken(request);
 
-        if (token != null && jwtProvider.validate(token)) {
-            String username = jwtProvider.getUsername(token);
-            // 토큰에서 role claim 추출 (Access Token에만 존재)
-            String role = jwtProvider.getRole(token);
+        if (token != null && jwtProvider.validateAccessToken(token)) {
+            String jti = jwtProvider.getJti(token);
+            if (!tokenStoreService.isBlacklisted(jti)) {
+                String username = jwtProvider.getUsername(token);
+                String role = jwtProvider.getRole(token);
 
-            UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                    username,
-                    null,
-                    List.of(new SimpleGrantedAuthority(role))
-            );
-            SecurityContextHolder.getContext().setAuthentication(auth);
+                if (role != null) {
+                    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                            username,
+                            token,
+                            List.of(new SimpleGrantedAuthority(role))
+                    );
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                }
+            }
         }
 
         filterChain.doFilter(request, response);
     }
 
-    /** Authorization 헤더에서 Bearer 토큰 추출 */
     private String resolveToken(HttpServletRequest request) {
         String bearer = request.getHeader("Authorization");
         if (bearer != null && bearer.startsWith("Bearer ")) {
