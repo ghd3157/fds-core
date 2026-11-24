@@ -7,9 +7,11 @@ import com.example.demo.domain.TransactionLog;
 import com.example.demo.domain.TransactionLog.ProcessStatus;
 import com.example.demo.dto.AlertPayload;
 import com.example.demo.dto.FraudResultDto;
+import com.example.demo.dto.ShapContributionDto;
 import com.example.demo.repository.FraudAlertRepository;
 import com.example.demo.repository.TransactionLogRepository;
 import com.example.demo.websocket.AlertNotificationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -39,6 +42,7 @@ class FraudProcessServiceTest {
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
     @Mock private AlertNotificationService alertNotificationService;
+    @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private FraudProcessService fraudProcessService;
@@ -66,8 +70,12 @@ class FraudProcessServiceTest {
                 .riskScore(95.0)
                 .ruleScore(95.0)
                 .mlScore(87.42)
+                .anomalyScore(84.10)
                 .detectionSource("HYBRID")
                 .detectionReason("[RULE] 단시간 다중 결제 (1분 내 5회)")
+                .shapContributions(java.util.List.of(
+                        new ShapContributionDto("tx_count_1m", "1분 내 결제빈도 급증", 5.0, 3.2)
+                ))
                 .txCount1m(5)
                 .txCount10m(6)
                 .txCount1h(8)
@@ -92,6 +100,8 @@ class FraudProcessServiceTest {
         assertThat(saved.getRiskScore()).isEqualTo(95.0);
         assertThat(saved.getRuleScore()).isEqualTo(95.0);
         assertThat(saved.getMlScore()).isEqualTo(87.42);
+        assertThat(saved.getAnomalyScore()).isEqualTo(84.10);
+        assertThat(saved.getShapJson()).contains("tx_count_1m");
         assertThat(saved.getDetectionSource()).isEqualTo(DetectionSource.HYBRID);
         assertThat(saved.getTxCount1m()).isEqualTo(5);
         assertThat(saved.getReviewStatus()).isEqualTo(ReviewStatus.UNCONFIRMED);

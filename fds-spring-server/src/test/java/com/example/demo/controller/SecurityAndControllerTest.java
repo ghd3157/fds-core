@@ -12,6 +12,7 @@ import com.example.demo.security.TokenStoreService;
 import com.example.demo.service.AlertService;
 import com.example.demo.service.DashboardService;
 import com.example.demo.service.LogIngestionService;
+import com.example.demo.service.ModelManagementService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = {
         LogIngestionController.class,
         DashboardController.class,
-        AlertController.class
+        AlertController.class,
+        ModelManagementController.class
 })
 @Import({SecurityConfig.class, JwtProvider.class, GlobalExceptionHandler.class})
 @TestPropertySource(properties = {
@@ -53,6 +55,7 @@ class SecurityAndControllerTest {
     @MockitoBean private LogIngestionService logIngestionService;
     @MockitoBean private DashboardService dashboardService;
     @MockitoBean private AlertService alertService;
+    @MockitoBean private ModelManagementService modelManagementService;
 
     @Test
     @DisplayName("POST /api/v1/logs는 X-API-Key가 없으면 401 UNAUTHORIZED를 반환한다")
@@ -161,5 +164,24 @@ class SecurityAndControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reviewStatus").value("CONFIRMED_FRAUD"))
                 .andExpect(jsonPath("$.reviewedBy").value("admin"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/models/retrain은 ROLE_VIEWER 접근 시 403, ROLE_ADMIN 접근 시 200을 반환한다")
+    void modelRetrain_rbacCheck() throws Exception {
+        String viewerToken = jwtProvider.generateAccessToken("viewer", "ROLE_VIEWER");
+        String adminToken = jwtProvider.generateAccessToken("admin", "ROLE_ADMIN");
+        when(tokenStoreService.isBlacklisted(any())).thenReturn(false);
+        when(modelManagementService.triggerRetrain(eq(false), eq("admin")))
+                .thenReturn(java.util.Map.of("promoted", true, "newVersion", "lgbm-iforest-v2"));
+
+        mockMvc.perform(post("/api/v1/models/retrain")
+                        .header("Authorization", "Bearer " + viewerToken))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/models/retrain")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.promoted").value(true));
     }
 }
