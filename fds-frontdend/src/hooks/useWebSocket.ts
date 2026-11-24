@@ -1,46 +1,57 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import SockJS from 'sockjs-client'
 import { Client, type IMessage } from '@stomp/stompjs'
+import type { RealtimeAlertPayload } from '../types/fds'
 
-const WS_URL = 'http://localhost:8080/ws-fds'
+const WS_URL = import.meta.env.VITE_WS_URL ?? 'http://localhost:8080/ws-fds'
 const TOPIC = '/topic/alerts'
 
-export interface FraudAlert {
-  transactionId: string
-  amount: number
-  message: string
-}
+export type WsConnectionState = 'connecting' | 'connected' | 'disconnected'
 
 interface UseWebSocketOptions {
-  onAlert: (alert: FraudAlert) => void
+  onAlert: (alert: RealtimeAlertPayload) => void
 }
 
 export default function useWebSocket({ onAlert }: UseWebSocketOptions) {
   const clientRef = useRef<Client | null>(null)
+  const onAlertRef = useRef(onAlert)
+  onAlertRef.current = onAlert
+
+  const [connectionState, setConnectionState] =
+    useState<WsConnectionState>('connecting')
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken')
-
     const client = new Client({
-      // SockJS를 transport로 사용
       webSocketFactory: () => new SockJS(WS_URL),
-
-      // STOMP CONNECT 프레임에 JWT 포함
-      connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
-
-      // 연결 끊어지면 3초 후 재연결
       reconnectDelay: 3000,
 
+      // 재연결 시마다 최신 Access Token을 STOMP CONNECT 헤더에 주입
+      beforeConnect: () => {
+        setConnectionState('connecting')
+        const token = localStorage.getItem('accessToken')
+        client.connectHeaders = token
+          ? { Authorization: `Bearer ${token}` }
+          : {}
+      },
+
       onConnect: () => {
+        setConnectionState('connected')
         client.subscribe(TOPIC, (message: IMessage) => {
           try {
-            const alert: FraudAlert = JSON.parse(message.body)
-            onAlert(alert)
-          } catch {
-            // 파싱 실패 시 message.body를 그대로 표시
-            onAlert({ transactionId: '-', amount: 0, message: message.body })
+            const payload: RealtimeAlertPayload = JSON.parse(message.body)
+            onAlertRef.current(payload)
+          } catch (err) {
+            console.error('[WebSocket] AlertPayload 파싱 실패:', err, message.body)
           }
         })
+      },
+
+      onStompError: () => {
+        setConnectionState('disconnected')
+      },
+
+      onWebSocketClose: () => {
+        setConnectionState('disconnected')
       },
     })
 
@@ -50,9 +61,7 @@ export default function useWebSocket({ onAlert }: UseWebSocketOptions) {
     return () => {
       client.deactivate()
     }
-    // onAlert는 렌더링마다 새 참조가 생기므로 의존성 배열에서 제외
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return clientRef
+  return { clientRef, connectionState }
 }
