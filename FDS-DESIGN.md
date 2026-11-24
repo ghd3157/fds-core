@@ -671,10 +671,11 @@ python simulator/traffic_simulator.py --mode csv --file data/fraudTest.csv --tps
 - [x] `TransactionsPage.tsx`: 검색·필터·페이징 및 상세 보기 구현
 - [x] **검증 기준**: `npm run build` (`tsc -b && vite build` 305ms) & `npm run lint` (`oxlint` 0 warnings, 0 errors) 통과
 
-### Phase 4 — 시뮬레이터 구축 & End-to-End 통합 데모 검증
-- [ ] `simulator/traffic_simulator.py` 구현 (`mixed`, `burst`, `scenario`, `csv` 모드)
-- [ ] 3개 서버 + Docker 인프라 동시 기동 후 데모 시나리오 **S1 ~ S4** 전 구간 검증:
-  - Python 재시작 시 중복 알람 미발생 확인
-  - `burst` 6건 발송 시 Redis `tx_count_1m >= 5` → `HYBRID` 탐지 → Toast + 대시보드 자동 갱신 확인
-  - 관리자 사기 확정/오탐 처리 및 `ROLE_VIEWER` 권한 차단 확인
-- [ ] 기존 하위 문서(`fds-spring-server/docs/*`, `fds-python-server/docs/*`, `fds-frontdend/frontend-requirements.md`) 상단에 `FDS-DESIGN.md`로 통합되었음을 안내 또는 최신화
+### Phase 4 — 시뮬레이터 구축 & End-to-End 통합 데모 검증 ✅ 완료
+- [x] `simulator/traffic_simulator.py` 구현 (`mixed`, `burst`, `scenario`, `csv` 모드 + `--dry-run` 및 단위 테스트 `simulator/test_simulator.py` 2/2 통과)
+- [x] 루트 `README.md` 실행·데모 가이드 작성 및 기존 하위 문서(`fds-spring-server/docs/*`, `fds-python-server/docs/*`, `fds-frontdend/frontend-requirements.md`)에 `FDS-DESIGN.md` 통합 안내 반영
+- [x] 신규 Kafka 볼륨 토픽 자동 생성(`KafkaTopicConfig`) 및 Python `UNKNOWN_TOPIC_OR_PART` 안전 대기 보완
+- [x] Docker Desktop + 3개 서버 동시 실행하여 데모 시나리오 **S1 ~ S4** 전 구간 실환경 E2E 검증 완료:
+  - Python 재시작 시 커밋 오프셋 유지 및 중복 알람·중복 카운트 **0건** 확인 (`todayFraudCount: 7 → 7`, `completeCount: 9 → 9`)
+  - `burst` 6건 발송 시 Redis `tx_count_1m = 6` → `HYBRID` (`risk=100.0`, `[RULE] 단시간 다중 결제 (1분 내 6회) | [ML] 주요 요인: 고액 결제, 고위험 업종`) 탐지 확인
+  - `ROLE_VIEWER` 403 차단 및 `ROLE_ADMIN` 사기 확정 처리(`unconfirmedAlertCount: 7 → 6`) 확인

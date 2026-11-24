@@ -1,3 +1,6 @@
+> [!NOTE]
+> 본 문서는 초기 v1.0 설계 기록입니다. **v2.0 전면 재설계 기준 화면 구조·API/WebSocket 계약·실시간 자동 갱신 명세는 최상위 [FDS-DESIGN.md](../FDS-DESIGN.md)를 참조하세요.**
+
 # FDS (Fraud Detection System) Frontend 요구사항 명세서
 
 ## 행동 지침 (Behavioral Guidelines)

@@ -1,3 +1,6 @@
+> [!NOTE]
+> 본 문서는 초기 v1.0 설계 기록입니다. **v2.0 전면 재설계 기준 아키텍처·ERD·API·Kafka·WebSocket 통합 명세는 최상위 [FDS-DESIGN.md](../../FDS-DESIGN.md)를 참조하세요.**
+
 # Spring Boot FDS (Fraud Detection System) 백엔드 구현 명세서
 
 ## 행동 지침 (Behavioral Guidelines)

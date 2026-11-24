@@ -1,3 +1,6 @@
+> [!NOTE]
+> 본 문서는 초기 v1.0 설계 기록입니다. **v2.0 전면 재설계 기준 LightGBM·Redis 결제빈도·하이브리드 탐지·Kafka 수동 커밋 명세는 최상위 [FDS-DESIGN.md](../../FDS-DESIGN.md)를 참조하세요.**
+
 # Python FastAPI FDS (이상 탐지) 서버 요구사항 명세서
 
 ## 행동 지침 (Behavioral Guidelines)
