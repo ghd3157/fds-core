@@ -679,3 +679,64 @@ python simulator/traffic_simulator.py --mode csv --file data/fraudTest.csv --tps
   - Python 재시작 시 커밋 오프셋 유지 및 중복 알람·중복 카운트 **0건** 확인 (`todayFraudCount: 7 → 7`, `completeCount: 9 → 9`)
   - `burst` 6건 발송 시 Redis `tx_count_1m = 6` → `HYBRID` (`risk=100.0`, `[RULE] 단시간 다중 결제 (1분 내 6회) | [ML] 주요 요인: 고액 결제, 고위험 업종`) 탐지 확인
   - `ROLE_VIEWER` 403 차단 및 `ROLE_ADMIN` 사기 확정 처리(`unconfirmedAlertCount: 7 → 6`) 확인
+
+
+---
+
+## 10. Phase 5 확장 설계 — 완성형 AI / MLOps 고도화 ("탐지 → 설명 → 대응 → 자가 학습")
+
+> 캡스톤 디자인 발표 및 이직 포트폴리오 완성도를 극대화하기 위해 기존 v2.0 파이프라인 위에 **멀티 모델 앙상블 · XAI 시각화 · 생성형 AI 관제 리포트 · Human-in-the-Loop MLOps · 데이터 드리프트 감지**를 통합 확장합니다.
+
+### 10.1 확장 아키텍처 흐름
+
+```mermaid
+flowchart LR
+    Tx["실시간 결제 스트림"] --> L1["Layer 1: 정책 룰 (KRW)"]
+    Tx --> L2["Layer 2: LightGBM (지도)"]
+    Tx --> L3["Layer 3: Isolation Forest (비지도)"]
+    L1 & L2 & L3 --> Ensemble["3중 하이브리드 결합<br/>RULE / ML / ANOMALY / HYBRID"]
+    Ensemble --> XAI["피처별 TreeSHAP 기여도 저장<br/>+ PSI 드리프트 모니터링"]
+    XAI --> UI["React 관제 대시보드"]
+    UI -->|"버튼 클릭"| Copilot["AI 관제 리포트 Copilot<br/>(Gemini API / 로컬 XAI Fallback)"]
+    UI -->|"관리자 사기확정/오탐 판정"| FB[("MariaDB 피드백 축적")]
+    FB -->|"재학습 요청 (ROLE_ADMIN)"| Retrain["Champion vs Challenger 검증<br/>& 무중단 모델 Hot-Swap"]
+    Retrain --> L2
+    Retrain --> L3
+```
+
+### 10.2 세부 설계 명세
+
+#### A. 3중 앙상블 탐지 (`Rule` + `LightGBM` + `Isolation Forest`)
+- **비지도 이상탐지 (`IsolationForest`)**: 학습 시 정상 거래(`y == 0`)만 학습하여 과거 사기 레이블에 없던 **신종(Zero-day) 이상 패턴**을 포착합니다.
+- **스코어 정규화**: `-decision_function(X)` 값을 학습 시 저장된 분위수(5% ~ 99.5%) 기준으로 `0.0 ~ 100.0` 범위의 `anomalyScore`로 변환합니다.
+- **최종 결합 정책**:
+  - `finalRiskScore = max(ruleScore or 0.0, mlScore or 0.0, anomalyScore or 0.0)`
+  - 2개 이상 레이어가 임계치(`80.0`)를 초과하면 `HYBRID`, 단일 레이어만 초과 시 각각 `RULE`, `ML`, `ANOMALY`, 모두 미만 시 `NONE`으로 분류합니다.
+
+#### B. XAI 피처별 SHAP 기여도 시각화
+- LightGBM `pred_contrib=True`로 산출한 12개 피처의 SHAP 기여도 중 절댓값 상위 6개(`[{ feature, label, value, shap }]`)를 Kafka `fraud-result-topic` 및 `fraud_alert.shap_json`에 저장합니다.
+- 프론트엔드 `AlertDetailModal`에서 가로 발산형 막대 차트(빨강: 사기 확률 상승 `+`, 파랑: 정상 방향 `-`)로 시각화합니다.
+
+#### C. AI 관제 사건 요약 & 대응 리포트 Copilot
+- **API**: `POST /api/v1/alerts/{alertId}/ai-report` (Spring → Python `POST /api/v1/copilot/report`)
+- 해당 알람 정보 + 동일 사용자의 최근 거래 5건을 컨텍스트로 전달하여 `{ summary, riskLevel, recommendedActions[], customerSmsDraft, generator }` JSON 리포트를 생성합니다.
+- `GEMINI_API_KEY` 환경변수 설정 시 Gemini API(`gemini-2.5-flash`)를 호출하며, 미설정/오류 시에도 실제 SHAP·룰·빈도 데이터 기반의 **로컬 지능형 XAI 리포트 Fallback**을 반환해 오프라인 발표 환경에서도 100% 동작합니다.
+
+#### D. Human-in-the-Loop 재학습 & Champion–Challenger 무중단 핫스왑
+- **API**:
+  - `GET /api/v1/models/status` (인증) — 현재 Champion 모델 버전·평가 지표(`PR-AUC`, `ROC-AUC`, `F1`, 혼동 행렬)·PSI 드리프트 상태·누적 관리자 피드백 건수·재학습 이력 조회
+  - `POST /api/v1/models/retrain` (`ROLE_ADMIN` 전용) — MariaDB의 관리자 리뷰 완료 데이터(`CONFIRMED_FRAUD=1`, `FALSE_POSITIVE=0`)를 Python 서버로 전달해 가중 학습 수행
+- **Champion–Challenger 검증**: 신규 모델(Challenger)의 시계열 검증 `PR-AUC`가 기존 Champion 대비 열화되지 않으면(`challenger >= champion - 0.01` 또는 `forcePromote=true`) 아티팩트를 교체하고 실행 중인 Python 메모리의 모델을 **무중단 핫스왑(Hot-Swap)** 합니다.
+
+#### E. 실시간 데이터 드리프트 모니터링 (PSI)
+- 학습 시점의 `amount` 및 `tx_count_1m` 기준 구간 비율(10-bin histogram)을 `metadata.json`에 저장합니다.
+- 운영 중 유입되는 실시간 거래 슬라이딩 윈도우(최근 500건)와 기준 분포의 **PSI(Population Stability Index)** 를 실시간 산출합니다:
+  - `PSI < 0.10`: `NORMAL` (정상)
+  - `0.10 <= PSI < 0.25`: `WARNING` (분포 변화 주의)
+  - `PSI >= 0.25`: `DRIFT` (드리프트 감지 — 재학습 권장)
+
+### 10.3 Phase 5 구현 체크리스트 ✅ 완료
+- [x] **Python AI**: `IsolationForest` 학습·추론 통합, 피처별 `shapContributions` 출력, `drift_monitor.py`(PSI), `copilot_service.py`(Gemini + 로컬 XAI Fallback), `retrain_service.py`(HITL + Champion/Challenger 핫스왑)
+- [x] **Spring Boot**: `FraudAlert` 확장(`anomalyScore`, `shapJson`, `DetectionSource.ANOMALY`), `ModelManagementController`/`Service`(`GET /api/v1/models/status`, `POST /api/v1/models/retrain`), `POST /api/v1/alerts/{id}/ai-report`
+- [x] **React Frontend**: `AlertDetailModal` 3중 점수 비교 + SHAP XAI 발산 막대 차트 + AI 관제 리포트 패널(SMS 복사), 신규 **`/models` (`ModelManagementPage.tsx`)** (성능 지표·혼동 행렬·PSI 드리프트 게이지·피드백 재학습·버전 이력)
+- [x] **검증**: Spring `gradlew test` (19/19) + Python `pytest` (12/12) + Frontend `npm run build && lint` (0 errors/0 warnings) + 실환경 E2E(3중 앙상블·SHAP·AI 리포트·HITL 재학습 무중단 핫스왑) 통과
