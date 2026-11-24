@@ -123,9 +123,10 @@ export default function AlertsPage() {
               className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
             >
               <option value="">탐지 출처: 전체</option>
-              <option value="HYBRID">HYBRID (룰 + ML)</option>
+              <option value="HYBRID">HYBRID (다중 앙상블)</option>
               <option value="RULE">RULE (정책 룰)</option>
-              <option value="ML">ML (LightGBM)</option>
+              <option value="ML">ML (LightGBM 지도)</option>
+              <option value="ANOMALY">ANOMALY (IsolationForest 비지도)</option>
             </select>
 
             <select

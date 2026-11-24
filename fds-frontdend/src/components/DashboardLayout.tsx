@@ -8,6 +8,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard': '실시간 모니터링 대시보드',
   '/alerts': '이상 탐지 알람 관리',
   '/transactions': '전체 결제 내역 조회',
+  '/models': 'AI 모델 & MLOps 관리',
 }
 
 export default function DashboardLayout() {
@@ -111,6 +112,20 @@ export default function DashboardLayout() {
           >
             <span>💳</span>
             <span>전체 결제 내역</span>
+          </NavLink>
+
+          <NavLink
+            to="/models"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              }`
+            }
+          >
+            <span>🤖</span>
+            <span>AI 모델 관리</span>
           </NavLink>
         </nav>
 

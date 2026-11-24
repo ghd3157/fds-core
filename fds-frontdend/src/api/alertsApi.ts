@@ -1,5 +1,6 @@
 import axiosInstance from './axiosInstance'
 import type {
+  CopilotReport,
   DetectionSource,
   FraudAlertItem,
   PageResponse,
@@ -49,5 +50,10 @@ export async function reviewAlert(
     `/alerts/${alertId}/review`,
     payload,
   )
+  return res.data
+}
+
+export async function generateAiReport(alertId: number): Promise<CopilotReport> {
+  const res = await axiosInstance.post<CopilotReport>(`/alerts/${alertId}/ai-report`)
   return res.data
 }

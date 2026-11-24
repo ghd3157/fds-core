@@ -5,6 +5,7 @@ import { RealtimeProvider } from './context/RealtimeContext'
 import AlertsPage from './pages/AlertsPage'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
+import ModelManagementPage from './pages/ModelManagementPage'
 import TransactionsPage from './pages/TransactionsPage'
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
+          <Route path="/models" element={<ModelManagementPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

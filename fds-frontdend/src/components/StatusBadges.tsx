@@ -43,6 +43,10 @@ const SOURCE_STYLES: Record<DetectionSource, { cls: string; label: string }> = {
     cls: 'bg-sky-500/15 text-sky-300 border border-sky-500/40',
     label: 'ML',
   },
+  ANOMALY: {
+    cls: 'bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/40',
+    label: 'ANOMALY',
+  },
 }
 
 export function DetectionSourceBadge({
