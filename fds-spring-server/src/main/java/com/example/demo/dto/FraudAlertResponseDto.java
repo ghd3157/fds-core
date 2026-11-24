@@ -2,15 +2,20 @@ package com.example.demo.dto;
 
 import com.example.demo.domain.FraudAlert;
 import com.example.demo.domain.TransactionLog;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Builder;
 import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Builder
 public class FraudAlertResponseDto {
+
+    private static final ObjectMapper SHAP_MAPPER = new ObjectMapper();
 
     private Long alertId;
     private String transactionId;
@@ -23,8 +28,10 @@ public class FraudAlertResponseDto {
     private Double riskScore;
     private Double ruleScore;
     private Double mlScore;
+    private Double anomalyScore;
     private String detectionSource;
     private String detectionReason;
+    private List<ShapContributionDto> shapContributions;
     private Integer txCount1m;
     private String reviewStatus;
     private String reviewNote;
@@ -46,8 +53,10 @@ public class FraudAlertResponseDto {
                 .riskScore(alert.getRiskScore())
                 .ruleScore(alert.getRuleScore())
                 .mlScore(alert.getMlScore())
+                .anomalyScore(alert.getAnomalyScore())
                 .detectionSource(alert.getDetectionSource().name())
                 .detectionReason(alert.getDetectionReason())
+                .shapContributions(parseShap(alert.getShapJson()))
                 .txCount1m(alert.getTxCount1m())
                 .reviewStatus(alert.getReviewStatus().name())
                 .reviewNote(alert.getReviewNote())
@@ -55,5 +64,16 @@ public class FraudAlertResponseDto {
                 .reviewedAt(alert.getReviewedAt())
                 .createdAt(alert.getCreatedAt())
                 .build();
+    }
+
+    private static List<ShapContributionDto> parseShap(String shapJson) {
+        if (shapJson == null || shapJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            return SHAP_MAPPER.readValue(shapJson, new TypeReference<>() {});
+        } catch (Exception ignored) {
+            return List.of();
+        }
     }
 }

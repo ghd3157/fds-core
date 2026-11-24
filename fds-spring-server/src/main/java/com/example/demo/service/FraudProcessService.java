@@ -7,9 +7,11 @@ import com.example.demo.domain.TransactionLog;
 import com.example.demo.domain.TransactionLog.ProcessStatus;
 import com.example.demo.dto.AlertPayload;
 import com.example.demo.dto.FraudResultDto;
+import com.example.demo.dto.ShapContributionDto;
 import com.example.demo.repository.FraudAlertRepository;
 import com.example.demo.repository.TransactionLogRepository;
 import com.example.demo.websocket.AlertNotificationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +25,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -42,6 +45,7 @@ public class FraudProcessService {
     private final FraudAlertRepository fraudAlertRepository;
     private final StringRedisTemplate redisTemplate;
     private final AlertNotificationService alertNotificationService;
+    private final ObjectMapper objectMapper;
 
     @Value("${fds.detection.threshold:80.0}")
     private double fraudThreshold;
@@ -79,8 +83,10 @@ public class FraudProcessService {
                         .riskScore(dto.getRiskScore())
                         .ruleScore(dto.getRuleScore())
                         .mlScore(dto.getMlScore())
+                        .anomalyScore(dto.getAnomalyScore())
                         .detectionSource(resolveDetectionSource(dto))
                         .detectionReason(resolveReason(dto))
+                        .shapJson(serializeShap(dto.getShapContributions()))
                         .txCount1m(dto.getTxCount1m() != null ? dto.getTxCount1m() : 1)
                         .reviewStatus(ReviewStatus.UNCONFIRMED)
                         .createdAt(nowKst)
@@ -101,6 +107,18 @@ public class FraudProcessService {
                 alertNotificationService.sendAlert(payloadToSend);
             }
         });
+    }
+
+    private String serializeShap(List<ShapContributionDto> shapList) {
+        if (shapList == null || shapList.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(shapList);
+        } catch (Exception e) {
+            log.warn("[FraudProcess] Failed to serialize shapContributions: {}", e.getMessage());
+            return null;
+        }
     }
 
     private void incrementStatsCounters(LocalDateTime nowKst, boolean isFraud) {
@@ -128,10 +146,17 @@ public class FraudProcessService {
                 // NONE 등 FraudAlert 저장용 enum 외 값이 들어온 경우 스코어 기반으로 보정
             }
         }
+        int hits = 0;
         boolean ruleHit = dto.getRuleScore() != null && dto.getRuleScore() >= fraudThreshold;
         boolean mlHit = dto.getMlScore() != null && dto.getMlScore() >= fraudThreshold;
-        if (ruleHit && mlHit) return DetectionSource.HYBRID;
+        boolean anomHit = dto.getAnomalyScore() != null && dto.getAnomalyScore() >= fraudThreshold;
+        if (ruleHit) hits++;
+        if (mlHit) hits++;
+        if (anomHit) hits++;
+
+        if (hits >= 2) return DetectionSource.HYBRID;
         if (ruleHit) return DetectionSource.RULE;
+        if (anomHit) return DetectionSource.ANOMALY;
         return DetectionSource.ML;
     }
 

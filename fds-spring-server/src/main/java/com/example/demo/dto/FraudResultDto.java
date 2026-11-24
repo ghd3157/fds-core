@@ -5,9 +5,11 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * Python AI 서버 → Spring Boot (Kafka: fraud-result-topic)
- * FDS-DESIGN.md Section 4.2 계약 기준
+ * Phase 5: 3중 앙상블(anomalyScore) 및 피처별 SHAP 기여도(shapContributions) 포함
  */
 @Getter
 @Builder
@@ -18,8 +20,10 @@ public class FraudResultDto {
     private Double riskScore;
     private Double ruleScore;
     private Double mlScore;
-    private String detectionSource;  // RULE | ML | HYBRID | NONE
+    private Double anomalyScore;
+    private String detectionSource;  // RULE | ML | ANOMALY | HYBRID | NONE
     private String detectionReason;
+    private List<ShapContributionDto> shapContributions;
     private Integer txCount1m;
     private Integer txCount10m;
     private Integer txCount1h;

@@ -3,10 +3,13 @@ package com.example.demo.service;
 import com.example.demo.domain.FraudAlert;
 import com.example.demo.domain.FraudAlert.DetectionSource;
 import com.example.demo.domain.FraudAlert.ReviewStatus;
+import com.example.demo.domain.TransactionLog;
 import com.example.demo.dto.AlertReviewRequestDto;
+import com.example.demo.dto.CopilotReportResponseDto;
 import com.example.demo.dto.FraudAlertResponseDto;
 import com.example.demo.exception.BusinessException;
 import com.example.demo.repository.FraudAlertRepository;
+import com.example.demo.repository.TransactionLogRepository;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -30,6 +33,8 @@ public class AlertService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final FraudAlertRepository fraudAlertRepository;
+    private final TransactionLogRepository transactionLogRepository;
+    private final AiServerClient aiServerClient;
 
     @Transactional(readOnly = true)
     public Page<FraudAlertResponseDto> getAlerts(
@@ -38,7 +43,6 @@ public class AlertService {
             Pageable pageable
     ) {
         Specification<FraudAlert> spec = (root, query, cb) -> {
-            // 페이징 본문 쿼리에서만 transactionLog를 fetch join하여 N+1 방지 (count 쿼리 제외)
             if (query != null && !Long.class.equals(query.getResultType()) && !long.class.equals(query.getResultType())) {
                 root.fetch("transactionLog", JoinType.INNER);
             }
@@ -87,5 +91,56 @@ public class AlertService {
                 alertId, request.getReviewStatus(), reviewer);
 
         return FraudAlertResponseDto.from(alert);
+    }
+
+    /** AI 관제 사건 요약 & 대응 리포트 생성 (동일 사용자 최근 5건 이력 컨텍스트 포함) */
+    @Transactional(readOnly = true)
+    public CopilotReportResponseDto generateAiReport(Long alertId) {
+        FraudAlert alert = fraudAlertRepository.findWithTransactionLogById(alertId)
+                .orElseThrow(() -> BusinessException.notFound(
+                        "ALERT_NOT_FOUND",
+                        "이상 탐지 알람을 찾을 수 없습니다: " + alertId
+                ));
+
+        FraudAlertResponseDto dto = FraudAlertResponseDto.from(alert);
+        TransactionLog tx = alert.getTransactionLog();
+
+        List<TransactionLog> recentLogs =
+                transactionLogRepository.findTop5ByUserIdOrderByTransactionDateDesc(tx.getUserId());
+        List<Long> recentIds = recentLogs.stream().map(TransactionLog::getId).toList();
+        Set<Long> fraudTxIds = recentIds.isEmpty()
+                ? Set.of()
+                : fraudAlertRepository.findByTransactionLogIdIn(recentIds).stream()
+                        .map(a -> a.getTransactionLog().getId())
+                        .collect(Collectors.toSet());
+
+        List<Map<String, Object>> recentContext = recentLogs.stream().map(logItem -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("transactionId", logItem.getTransactionId());
+            m.put("amount", logItem.getAmount());
+            m.put("merchantCategory", logItem.getMerchantCategory());
+            m.put("transactionDate", logItem.getTransactionDate().toString());
+            m.put("isFraud", fraudTxIds.contains(logItem.getId()));
+            return m;
+        }).toList();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("alertId", dto.getAlertId());
+        payload.put("transactionId", dto.getTransactionId());
+        payload.put("userId", dto.getUserId());
+        payload.put("amount", dto.getAmount());
+        payload.put("merchantCategory", dto.getMerchantCategory());
+        payload.put("transactionDate", dto.getTransactionDate().toString());
+        payload.put("riskScore", dto.getRiskScore());
+        payload.put("ruleScore", dto.getRuleScore());
+        payload.put("mlScore", dto.getMlScore());
+        payload.put("anomalyScore", dto.getAnomalyScore());
+        payload.put("detectionSource", dto.getDetectionSource());
+        payload.put("detectionReason", dto.getDetectionReason());
+        payload.put("txCount1m", dto.getTxCount1m());
+        payload.put("shapContributions", dto.getShapContributions());
+        payload.put("recentTransactions", recentContext);
+
+        return aiServerClient.generateCopilotReport(payload);
     }
 }

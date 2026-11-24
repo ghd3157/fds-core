@@ -29,26 +29,34 @@ public class FraudAlert {
     @JoinColumn(name = "transaction_log_id", nullable = false, unique = true)
     private TransactionLog transactionLog;
 
-    /** 최종 하이브리드 위험 스코어 (0.0 ~ 100.0) */
+    /** 최종 3중 하이브리드 위험 스코어 (0.0 ~ 100.0) */
     @Column(name = "risk_score", nullable = false)
     private Double riskScore;
 
-    /** Rule Engine 점수 (미적중 시 null) */
+    /** Layer 1: Rule Engine 점수 (미적중 시 null) */
     @Column(name = "rule_score")
     private Double ruleScore;
 
-    /** LightGBM 모델 점수 (Fallback 시 null) */
+    /** Layer 2: LightGBM 지도학습 점수 (Fallback 시 null) */
     @Column(name = "ml_score")
     private Double mlScore;
 
-    /** 탐지 출처: RULE | ML | HYBRID */
+    /** Layer 3: Isolation Forest 비지도 이상 점수 (Fallback 시 null) */
+    @Column(name = "anomaly_score")
+    private Double anomalyScore;
+
+    /** 탐지 출처: RULE | ML | ANOMALY | HYBRID */
     @Enumerated(EnumType.STRING)
     @Column(name = "detection_source", nullable = false, length = 20)
     private DetectionSource detectionSource;
 
-    /** 탐지 사유 (Rule + TreeSHAP 기반 한글 요약) */
+    /** 탐지 사유 (Rule + TreeSHAP + Anomaly 기반 한글 요약) */
     @Column(name = "detection_reason", nullable = false, length = 500)
     private String detectionReason;
+
+    /** 피처별 TreeSHAP 기여도 JSON 배열 (XAI 차트 시각화용) */
+    @Column(name = "shap_json", columnDefinition = "TEXT")
+    private String shapJson;
 
     /** 탐지 당시 최근 1분간 해당 사용자 결제 횟수 */
     @Builder.Default
@@ -78,7 +86,7 @@ public class FraudAlert {
     private LocalDateTime createdAt;
 
     public enum DetectionSource {
-        RULE, ML, HYBRID
+        RULE, ML, ANOMALY, HYBRID
     }
 
     public enum ReviewStatus {

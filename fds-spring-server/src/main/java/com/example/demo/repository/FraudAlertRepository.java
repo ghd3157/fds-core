@@ -32,4 +32,10 @@ public interface FraudAlertRepository
     /** 알람 단건 상세 조회 시 TransactionLog 즉시 페치 */
     @Query("SELECT f FROM FraudAlert f JOIN FETCH f.transactionLog WHERE f.id = :id")
     Optional<FraudAlert> findWithTransactionLogById(@Param("id") Long id);
+
+    /** Human-in-the-Loop 재학습용: 관리자가 사기 확정 또는 오탐으로 판정한 모든 알람 조회 */
+    @Query("SELECT f FROM FraudAlert f JOIN FETCH f.transactionLog " +
+           "WHERE f.reviewStatus IN (com.example.demo.domain.FraudAlert$ReviewStatus.CONFIRMED_FRAUD, " +
+           "com.example.demo.domain.FraudAlert$ReviewStatus.FALSE_POSITIVE)")
+    List<FraudAlert> findReviewedWithTransactionLog();
 }

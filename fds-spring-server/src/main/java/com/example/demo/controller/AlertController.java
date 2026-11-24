@@ -3,6 +3,7 @@ package com.example.demo.controller;
 import com.example.demo.domain.FraudAlert.DetectionSource;
 import com.example.demo.domain.FraudAlert.ReviewStatus;
 import com.example.demo.dto.AlertReviewRequestDto;
+import com.example.demo.dto.CopilotReportResponseDto;
 import com.example.demo.dto.FraudAlertResponseDto;
 import com.example.demo.service.AlertService;
 import jakarta.validation.Valid;
@@ -48,5 +49,11 @@ public class AlertController {
             Authentication authentication
     ) {
         return ResponseEntity.ok(alertService.reviewAlert(alertId, request, authentication.getName()));
+    }
+
+    /** AI 관제 사건 요약 및 대응 권고 리포트 생성 */
+    @PostMapping("/{alertId}/ai-report")
+    public ResponseEntity<CopilotReportResponseDto> generateAiReport(@PathVariable Long alertId) {
+        return ResponseEntity.ok(alertService.generateAiReport(alertId));
     }
 }

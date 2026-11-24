@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface TransactionLogRepository
@@ -19,4 +20,7 @@ public interface TransactionLogRepository
     long countByStatus(ProcessStatus status);
 
     Page<TransactionLog> findAllByOrderByTransactionDateDesc(Pageable pageable);
+
+    /** AI 관제 리포트용 동일 사용자 최근 5건 거래 이력 조회 */
+    List<TransactionLog> findTop5ByUserIdOrderByTransactionDateDesc(String userId);
 }

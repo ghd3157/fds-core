@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 
 /**
  * WebSocket STOMP /topic/alerts 통일 브로드캐스트 Payload
- * FDS-DESIGN.md Section 6.4 계약 기준 (Spring ↔ Frontend 1:1 일치)
  */
 @Getter
 @Builder
@@ -25,6 +24,7 @@ public class AlertPayload {
     private Double riskScore;
     private Double ruleScore;
     private Double mlScore;
+    private Double anomalyScore;
     private String detectionSource;
     private String detectionReason;
     private Integer txCount1m;
@@ -41,6 +41,7 @@ public class AlertPayload {
                 .riskScore(alert.getRiskScore())
                 .ruleScore(alert.getRuleScore())
                 .mlScore(alert.getMlScore())
+                .anomalyScore(alert.getAnomalyScore())
                 .detectionSource(alert.getDetectionSource().name())
                 .detectionReason(alert.getDetectionReason())
                 .txCount1m(alert.getTxCount1m())

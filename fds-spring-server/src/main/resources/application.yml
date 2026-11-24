@@ -47,6 +47,8 @@ jwt:
 
 # FDS 도메인 설정
 fds:
+  ai-server:
+    base-url: ${FDS_AI_SERVER_URL:http://localhost:8000}
   detection:
     threshold: ${FDS_FRAUD_THRESHOLD:80.0}
   topics:

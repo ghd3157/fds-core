@@ -87,6 +87,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/v1/logs").hasRole("INGEST")
                 .requestMatchers("/ws-fds/**").permitAll() // HTTP 핸드쉐이크 허용, STOMP CONNECT에서 JWT 검증
                 .requestMatchers(HttpMethod.PATCH, "/api/v1/alerts/*/review").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/v1/models/retrain").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(
