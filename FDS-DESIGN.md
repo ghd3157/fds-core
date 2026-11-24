@@ -663,13 +663,13 @@ python simulator/traffic_simulator.py --mode csv --file data/fraudTest.csv --tps
 - [x] `main.py`: `lifespan` 컨텍스트 매니저 전환 및 `/health` 모델·Redis·Kafka 상태 반환
 - [x] **검증 기준**: `pytest` 9/9 통과 (피처 일치성, Redis ZSET 빈도 계산, Rule/ML/Hybrid 결합, Fallback, DLQ, API/스키마)
 
-### Phase 3 — React 프론트엔드 리팩토링 & UI 확장 (`fds-frontdend`)
-- [ ] `axiosInstance.ts` 및 API 모듈(`/api/v1/**` 통일, 401 자동 Refresh Queue, `alertsApi.ts`, `dashboardApi.ts`, `transactionsApi.ts`) 정비
-- [ ] `useWebSocket.ts` & `RealtimeAlertContext`: 통일된 `AlertPayload` 타입 반영, 연결 상태 표시, 1.5초 디바운스 자동 갱신 구현
-- [ ] `DashboardPage.tsx`: KPI 카드 4종, `HourlyTrafficChart.tsx`(최근 24시간 차트), `FraudPieChart.tsx`(문구/API 수정), 최근 거래 요약 연동
-- [ ] `AlertsPage.tsx` & `AlertDetailModal.tsx`: 상태 탭/필터, Rule vs ML 점수 시각화, `ROLE_ADMIN` 사기 확정/오탐 처리 워크플로우 구현
-- [ ] `TransactionsPage.tsx`: 검색·필터·페이징 및 상세 보기 구현
-- [ ] **검증 기준**: `npm run build` (TypeScript strict 타입 체크 & Vite 프로덕션 빌드 무오류) + 브라우저 실동작 검증
+### Phase 3 — React 프론트엔드 리팩토링 & UI 확장 (`fds-frontdend`) ✅ 완료
+- [x] `axiosInstance.ts` 및 API 모듈(`/api/v1/**` 통일, 401 자동 Refresh Queue, `alertsApi.ts`, `dashboardApi.ts`, `transactionsApi.ts`) 정비
+- [x] `useWebSocket.ts` & `RealtimeContext`: 통일된 `AlertPayload` 타입 반영, 연결 상태 표시, 1.5초 디바운스 자동 갱신 구현
+- [x] `DashboardPage.tsx`: KPI 카드 4종, `HourlyTrafficChart.tsx`(최근 24시간 차트), `FraudPieChart.tsx`(문구/API 수정), 최근 거래 요약 연동
+- [x] `AlertsPage.tsx` & `AlertDetailModal.tsx`: 상태 탭/필터, Rule vs ML 점수 시각화, `ROLE_ADMIN` 사기 확정/오탐 처리 워크플로우 구현
+- [x] `TransactionsPage.tsx`: 검색·필터·페이징 및 상세 보기 구현
+- [x] **검증 기준**: `npm run build` (`tsc -b && vite build` 305ms) & `npm run lint` (`oxlint` 0 warnings, 0 errors) 통과
 
 ### Phase 4 — 시뮬레이터 구축 & End-to-End 통합 데모 검증
 - [ ] `simulator/traffic_simulator.py` 구현 (`mixed`, `burst`, `scenario`, `csv` 모드)

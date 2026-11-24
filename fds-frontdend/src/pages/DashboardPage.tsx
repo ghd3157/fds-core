@@ -1,146 +1,125 @@
-import { useState, useCallback, useEffect } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import useWebSocket, { type FraudAlert } from '../hooks/useWebSocket'
-import ToastContainer, { type Toast } from '../components/ToastContainer'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { getDashboardSummary } from '../api/dashboardApi'
 import FraudPieChart from '../components/FraudPieChart'
+import HourlyTrafficChart from '../components/HourlyTrafficChart'
 import TransactionTable from '../components/TransactionTable'
-import { getDashboardStats, type DashboardStats } from '../api/dashboardApi'
-
-// 공통 레이아웃 (사이드바 + 상단 네비게이션바)
-function DashboardLayout() {
-  const navigate = useNavigate()
-  const [toasts, setToasts] = useState<Toast[]>([])
-
-  const addToast = useCallback((alert: FraudAlert) => {
-    const message =
-      alert.message || `거래 ID: ${alert.transactionId} / 금액: ${alert.amount.toLocaleString()}원`
-    setToasts((prev) => [...prev, { id: Date.now(), message }])
-  }, [])
-
-  const removeToast = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
-
-  useWebSocket({ onAlert: addToast })
-
-  const handleLogout = () => {
-    localStorage.removeItem('accessToken')
-    navigate('/login')
-  }
-
-  return (
-    <div className="flex h-screen bg-gray-950 text-white">
-      {/* 우측 상단 Toast 알림 */}
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-
-      {/* 사이드바 */}
-      <aside className="w-60 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="px-6 py-5 border-b border-gray-800">
-          <span className="text-lg font-bold text-indigo-400">🛡 FDS</span>
-          <p className="text-xs text-gray-500 mt-0.5">Fraud Detection System</p>
-        </div>
-        <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
-          <NavLink
-            to="/dashboard"
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                isActive
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-              }`
-            }
-          >
-            📊 대시보드
-          </NavLink>
-        </nav>
-        <div className="px-3 py-4 border-t border-gray-800">
-          <button
-            onClick={handleLogout}
-            className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-          >
-            🚪 로그아웃
-          </button>
-        </div>
-      </aside>
-
-      {/* 메인 영역 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 상단 네비게이션바 */}
-        <header className="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6 flex-shrink-0">
-          <h2 className="text-sm font-semibold text-gray-300">대시보드</h2>
-          <div className="flex items-center gap-2 text-sm text-gray-400">
-            <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
-            admin
-          </div>
-        </header>
-
-        {/* 페이지 콘텐츠 */}
-        <main className="flex-1 overflow-auto p-6">
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  )
-}
-
-// 통계 카드
-const STAT_CARDS = [
-  { key: 'todayFraudCount', label: '오늘 탐지 건수', color: 'text-red-400', icon: '🚨' },
-  { key: 'pendingCount', label: '처리 중 (PENDING)', color: 'text-yellow-400', icon: '⏳' },
-  { key: 'completeCount', label: '처리 완료 (COMPLETE)', color: 'text-green-400', icon: '✅' },
-] as const
+import { useRealtime } from '../context/realtimeContextDef'
+import type { DashboardSummary } from '../types/fds'
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [statsLoading, setStatsLoading] = useState(true)
+  const navigate = useNavigate()
+  const { refreshTick } = useRealtime()
+  const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getDashboardStats()
-      .then(setStats)
-      .finally(() => setStatsLoading(false))
-  }, [])
+    let active = true
+    getDashboardSummary()
+      .then((res) => {
+        if (active) setSummary(res)
+      })
+      .catch(() => {
+        // 일시적 오류 시 기존 수치 유지
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [refreshTick])
+
+  const cards = [
+    {
+      id: 'todayFraud',
+      label: '오늘 이상 탐지',
+      value: summary ? `${summary.todayFraudCount.toLocaleString()}건` : '—',
+      sub: summary
+        ? `전체 ${summary.todayTotalCount.toLocaleString()}건 중 ${summary.todayFraudRatio.toFixed(2)}%`
+        : '오늘 KST 집계',
+      color: 'text-red-400',
+      icon: '🚨',
+      onClick: () => navigate('/alerts'),
+    },
+    {
+      id: 'unconfirmed',
+      label: '미확인 알람 (조치 필요)',
+      value: summary ? `${summary.unconfirmedAlertCount.toLocaleString()}건` : '—',
+      sub: '클릭하여 사기 확정 / 오탐 처리',
+      color: 'text-amber-400',
+      icon: '🔔',
+      onClick: () => navigate('/alerts?reviewStatus=UNCONFIRMED'),
+    },
+    {
+      id: 'pending',
+      label: 'AI 분석 대기 (PENDING)',
+      value: summary ? `${summary.pendingCount.toLocaleString()}건` : '—',
+      sub: 'Kafka 파이프라인 처리 중',
+      color: 'text-yellow-300',
+      icon: '⏳',
+      onClick: () => navigate('/transactions'),
+    },
+    {
+      id: 'complete',
+      label: '전체 분석 완료 (COMPLETE)',
+      value: summary ? `${summary.completeCount.toLocaleString()}건` : '—',
+      sub: '누적 처리 완료 결제 로그',
+      color: 'text-emerald-400',
+      icon: '✅',
+      onClick: () => navigate('/transactions'),
+    },
+  ]
 
   return (
     <div className="flex flex-col gap-6">
-      {/* 페이지 타이틀 */}
-      <div>
-        <h1 className="text-xl font-bold text-white">실시간 모니터링</h1>
-        <p className="text-gray-400 text-sm mt-1">신용카드 이상 결제 탐지 현황</p>
+      {/* 페이지 헤더 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white">실시간 이상 결제 모니터링</h1>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Rule Engine + LightGBM 하이브리드 탐지 · Redis 결제빈도 실시간 분석 현황
+          </p>
+        </div>
       </div>
 
-      {/* 통계 카드 */}
-      <div className="grid grid-cols-3 gap-4">
-        {STAT_CARDS.map(({ key, label, color, icon }) => (
-          <div key={key} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+      {/* KPI 카드 4종 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {cards.map((card) => (
+          <button
+            key={card.id}
+            type="button"
+            onClick={card.onClick}
+            className="text-left bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-xl p-5 transition-colors"
+          >
             <div className="flex items-center justify-between mb-2">
-              <p className="text-gray-400 text-sm">{label}</p>
-              <span className="text-lg">{icon}</span>
+              <p className="text-gray-400 text-xs font-medium">{card.label}</p>
+              <span className="text-lg">{card.icon}</span>
             </div>
-            <p className={`text-3xl font-bold ${color}`}>
-              {statsLoading ? (
-                <span className="inline-block w-16 h-8 bg-gray-700 rounded animate-pulse" />
+            <p className={`text-2xl font-bold ${card.color}`}>
+              {loading && !summary ? (
+                <span className="inline-block w-20 h-7 bg-gray-800 rounded animate-pulse" />
               ) : (
-                stats ? stats[key].toLocaleString() : '—'
+                card.value
               )}
             </p>
-          </div>
+            <p className="text-gray-500 text-xs mt-1.5">{card.sub}</p>
+          </button>
         ))}
       </div>
 
-      {/* 차트 + 테이블 영역 */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* 파이 차트 (1/3) */}
-        <div className="col-span-1">
+      {/* 중단 차트 2종 (12-col: 7 : 5) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-7">
+          <HourlyTrafficChart />
+        </div>
+        <div className="lg:col-span-5">
           <FraudPieChart />
         </div>
-
-        {/* 결제 내역 테이블 (2/3) */}
-        <div className="col-span-2">
-          <TransactionTable />
-        </div>
       </div>
+
+      {/* 하단 최근 결제 내역 요약 테이블 */}
+      <TransactionTable compact pageSize={10} />
     </div>
   )
 }
-
-export { DashboardLayout }

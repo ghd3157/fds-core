@@ -1,32 +1,35 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import LoginPage from './pages/LoginPage'
-import DashboardPage, { DashboardLayout } from './pages/DashboardPage'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import DashboardLayout from './components/DashboardLayout'
 import ProtectedRoute from './components/ProtectedRoute'
+import { RealtimeProvider } from './context/RealtimeContext'
+import AlertsPage from './pages/AlertsPage'
+import DashboardPage from './pages/DashboardPage'
+import LoginPage from './pages/LoginPage'
+import TransactionsPage from './pages/TransactionsPage'
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* 기본 경로 → /login 리다이렉트 */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* 로그인 페이지 */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/login" element={<LoginPage />} />
 
-        {/* 대시보드 (인증 필요) */}
+        {/* 인증 보호 영역 (공통 실시간 WebSocket 컨텍스트 + 레이아웃) */}
         <Route
-          path="/dashboard"
           element={
             <ProtectedRoute>
-              <DashboardLayout />
+              <RealtimeProvider>
+                <DashboardLayout />
+              </RealtimeProvider>
             </ProtectedRoute>
           }
         >
-          <Route index element={<DashboardPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/alerts" element={<AlertsPage />} />
+          <Route path="/transactions" element={<TransactionsPage />} />
         </Route>
 
-        {/* 매칭되지 않는 경로 → /login 리다이렉트 */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   )
