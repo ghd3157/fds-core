@@ -162,7 +162,15 @@ class KafkaPipelineWorker:
                 if msg is None:
                     continue
                 if msg.error():
-                    if msg.error().code() == KafkaError._PARTITION_EOF:
+                    err_code = msg.error().code()
+                    if err_code == KafkaError._PARTITION_EOF:
+                        continue
+                    if err_code == KafkaError.UNKNOWN_TOPIC_OR_PART:
+                        logger.warning(
+                            "Topic %s not yet available on broker — waiting 2s before retry...",
+                            settings.consumer_topic,
+                        )
+                        await asyncio.sleep(2.0)
                         continue
                     raise KafkaException(msg.error())
 
