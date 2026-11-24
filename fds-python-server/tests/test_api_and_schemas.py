@@ -22,7 +22,8 @@ def test_health_and_predict_endpoints_and_schema_validation():
     health = app_main.health_check()
     assert health["status"] == "ok"
     assert health["modelLoaded"] is True
-    assert health["modelVersion"] == "lgbm-fraud-v1.0"
+    assert health["modelVersion"].startswith("lgbm-iforest-")
+    assert health["iforestLoaded"] is True
     assert health["redisConnected"] is True
 
     # 2. /api/v1/predict 정상 추론 및 v2.0 출력 스키마 검증

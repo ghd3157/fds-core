@@ -1,10 +1,11 @@
 {
-  "model_version": "lgbm-fraud-v1.0",
-  "trained_at": "2026-11-23T00:36:29+09:00",
-  "dataset_source": "synthetic-sparkov-krw:60000",
+  "model_version": "lgbm-iforest-v20261124-161430",
+  "trained_at": "2026-11-24T16:14:32+09:00",
+  "dataset_source": "hitl-retrain(base=30000, feedback=2)",
   "currency": "KRW",
-  "train_samples": 48000,
-  "test_samples": 12000,
+  "train_samples": 24002,
+  "test_samples": 6000,
+  "feedback_samples": 2,
   "feature_names": [
     "amount",
     "log_amount",
@@ -40,17 +41,64 @@
     "adult": 17,
     "atm_withdrawal": 18
   },
+  "iforest_bounds": {
+    "p05": -0.206865,
+    "p995": 0.033391
+  },
+  "drift_baseline": {
+    "amount_edges": [
+      0.0,
+      13600.0,
+      19600.0,
+      25800.0,
+      32800.0,
+      40900.0,
+      51200.0,
+      65400.0,
+      87100.0,
+      135100.0,
+      1000000000.0
+    ],
+    "amount_ratios": [
+      0.099658,
+      0.098408,
+      0.100325,
+      0.100367,
+      0.100242,
+      0.100783,
+      0.099658,
+      0.100242,
+      0.100242,
+      0.100075
+    ],
+    "velocity_edges": [
+      0.0,
+      1.5,
+      2.5,
+      4.5,
+      10.5,
+      1000000.0
+    ],
+    "velocity_ratios": [
+      0.992459,
+      0.003125,
+      0.003708,
+      0.000708,
+      0.0
+    ]
+  },
   "metrics": {
-    "pr_auc": 0.995,
+    "pr_auc": 0.9919,
     "roc_auc": 0.9998,
-    "f1_at_0_80": 0.9688,
-    "f1_at_0_50": 0.971,
-    "recall_at_fpr_1pct": 0.9955,
+    "f1_at_0_80": 0.965,
+    "f1_at_0_50": 0.969,
+    "recall_at_fpr_1pct": 0.9923,
+    "iforest_roc_auc": 0.9909,
     "confusion_matrix_at_0_80": {
-      "tn": 11769,
-      "fp": 9,
-      "fn": 5,
-      "tp": 217
+      "tn": 5867,
+      "fp": 3,
+      "fn": 6,
+      "tp": 124
     }
   }
 }

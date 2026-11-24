@@ -1,0 +1,46 @@
+[
+  {
+    "version": "lgbm-iforest-v20261124-161430",
+    "trainedAt": "2026-11-24T16:14:32+09:00",
+    "datasetSource": "hitl-retrain(base=30000, feedback=2)",
+    "feedbackSamples": 2,
+    "promoted": true,
+    "note": "HITL 피드백 2건 반영 승격",
+    "metrics": {
+      "pr_auc": 0.9919,
+      "roc_auc": 0.9998,
+      "f1_at_0_80": 0.965,
+      "f1_at_0_50": 0.969,
+      "recall_at_fpr_1pct": 0.9923,
+      "iforest_roc_auc": 0.9909,
+      "confusion_matrix_at_0_80": {
+        "tn": 5867,
+        "fp": 3,
+        "fn": 6,
+        "tp": 124
+      }
+    }
+  },
+  {
+    "version": "lgbm-iforest-v1.0",
+    "trainedAt": "2026-11-24T16:05:52+09:00",
+    "datasetSource": "synthetic-sparkov-krw:60000",
+    "feedbackSamples": 0,
+    "promoted": true,
+    "note": "초기 모델 학습",
+    "metrics": {
+      "pr_auc": 0.995,
+      "roc_auc": 0.9998,
+      "f1_at_0_80": 0.9688,
+      "f1_at_0_50": 0.971,
+      "recall_at_fpr_1pct": 0.9955,
+      "iforest_roc_auc": 0.9923,
+      "confusion_matrix_at_0_80": {
+        "tn": 11769,
+        "fp": 9,
+        "fn": 5,
+        "tp": 217
+      }
+    }
+  }
+]

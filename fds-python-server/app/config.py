@@ -22,9 +22,18 @@ class Settings:
     model_path: Path = Path(
         os.getenv("FDS_MODEL_PATH", str(BASE_DIR / "models" / "lgbm_fraud_v1.joblib"))
     )
+    iforest_path: Path = Path(
+        os.getenv("FDS_IFOREST_PATH", str(BASE_DIR / "models" / "iforest_v1.joblib"))
+    )
     metadata_path: Path = Path(
         os.getenv("FDS_MODEL_METADATA_PATH", str(BASE_DIR / "models" / "metadata.json"))
     )
+    history_path: Path = Path(
+        os.getenv("FDS_MODEL_HISTORY_PATH", str(BASE_DIR / "models" / "history.json"))
+    )
+
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 
 settings = Settings()
