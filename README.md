@@ -25,13 +25,17 @@
 
 ```text
 fds-core/
-├── FDS-DESIGN.md          # v2.0 통합 상세 설계서
-├── docker-compose.yml     # MariaDB 10.11, Redis 7.2, Apache Kafka 3.7 (KRaft)
-├── .env.example           # 환경변수 템플릿
-├── fds-spring-server/     # Spring Boot 3.5 (Java 17) 백엔드 API · Kafka · WebSocket
-├── fds-python-server/     # FastAPI · LightGBM · Redis 결제빈도 · Kafka AI 워커
-├── fds-frontdend/         # React 19 · Vite · TypeScript · Tailwind v4 · Recharts
-└── simulator/             # 실시간 결제 트래픽 시뮬레이터 CLI
+├── FDS-DESIGN.md              # v2.0 통합 상세 설계서
+├── Jenkinsfile                # 5단계 Declarative CI/CD 파이프라인 (병렬 테스트·빌드·CD 배포·헬스검증)
+├── docker-compose.yml         # MariaDB 10.11, Redis 7.2, Apache Kafka 3.7 (KRaft 이중 리스너)
+├── docker-compose.app.yml     # Spring · Python AI · React Nginx 컨테이너 CD 스택
+├── docker-compose.jenkins.yml # 로컬 Jenkins CI/CD 서버 (Docker-out-of-Docker + JCasC)
+├── jenkins/                   # Jenkins Dockerfile, plugins.txt, casc.yaml
+├── .env.example               # 환경변수 템플릿
+├── fds-spring-server/         # Spring Boot 3.5 (Java 17) 백엔드 API · Kafka · WebSocket · Dockerfile
+├── fds-python-server/         # FastAPI · LightGBM · Isolation Forest · TreeSHAP · Redis · Dockerfile
+├── fds-frontdend/             # React 19 · Vite · TypeScript · Tailwind v4 · Nginx · Dockerfile
+└── simulator/                 # 실시간 결제 트래픽 시뮬레이터 CLI
 ```
 
 ---
@@ -88,10 +92,10 @@ python simulator/traffic_simulator.py --mode scenario --type night-risk
 ## 자동화 테스트 실행
 
 ```bash
-# Spring Boot (18개 단위·보안 테스트)
+# Spring Boot (19개 단위·보안·AI 관제 테스트)
 cd fds-spring-server && ./gradlew test
 
-# Python AI 서버 (9개 pytest 테스트)
+# Python AI 서버 (12개 pytest 테스트 — 3계층 앙상블·SHAP·PSI 드리프트·Copilot 포함)
 cd fds-python-server && .\.venv\Scripts\pytest.exe -v
 
 # React 프론트엔드 (TypeScript 빌드 & Oxlint)
@@ -99,4 +103,28 @@ cd fds-frontdend && npm run build && npm run lint
 
 # 트래픽 시뮬레이터 테스트 (2개 pytest 테스트)
 .\fds-python-server\.venv\Scripts\python.exe -m pytest -v simulator/test_simulator.py
+```
+
+---
+
+## Jenkins 로컬 CI/CD 파이프라인 (Docker + JCasC)
+
+Docker 환경에서 JCasC(Jenkins Configuration as Code)로 자동 초기화된 로컬 Jenkins 서버를 기동하고, 3개 서비스의 병렬 테스트·이미지 빌드·Docker Compose CD 배포·헬스체크까지 원클릭으로 실행할 수 있습니다.
+
+```bash
+# 1. 로컬 Jenkins 서버 기동 (포트 8090, JCasC 자동 초기화)
+docker compose -p fds-core -f docker-compose.jenkins.yml up -d --build
+```
+
+- **접속 주소**: `http://localhost:8090` (초기 계정: `admin` / `admin1234!`)
+- **자동 등록 파이프라인**: `fds-core-cicd` ([Jenkinsfile](./Jenkinsfile))
+  1. **Checkout & Environment**: 로컬 Git `main` 체크아웃 및 Docker/Compose 환경 확인
+  2. **Parallel CI**: Spring `./gradlew test`(JUnit XML 리포트) · Python 이미지 빌드 & `pytest` · React `lint & build` 병렬 실행
+  3. **Spring Boot Image Build**: Multi-stage `bootJar` → `eclipse-temurin:17-jre-alpine` 이미지 패키징
+  4. **CD Deploy**: `docker-compose.yml` + `docker-compose.app.yml` 기반 전체 스택 롤링 재기동 (`IMAGE_TAG=build-${BUILD_NUMBER}`)
+  5. **Post-Deploy Smoke & Health Verification**: Python `/health`, Spring 로그인 `HTTP 200`, Nginx `HTTP 200` 자동 검증 후 dangling 이미지 정리
+
+```bash
+# 전체 컨테이너 종료
+docker compose -p fds-core -f docker-compose.yml -f docker-compose.app.yml -f docker-compose.jenkins.yml stop
 ```
