@@ -20,8 +20,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     git config --global --add safe.directory '*'
 
-# Jenkins 초기 마법사 생략 및 JCasC 자동 구성 활성화
-ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false -Duser.timezone=Asia/Seoul"
+# Jenkins 초기 마법사 생략, JCasC 자동 구성, 로컬 Git 저장소 체크아웃 허용
+ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false -Duser.timezone=Asia/Seoul -Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true"
 ENV CASC_JENKINS_CONFIG=/usr/share/jenkins/ref/casc.yaml
 
 COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
