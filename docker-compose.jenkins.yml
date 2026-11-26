@@ -1,0 +1,34 @@
+services:
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    image: fds-jenkins:local
+    container_name: fds-jenkins
+    user: root
+    ports:
+      - "8090:8080"
+      - "50000:50000"
+    environment:
+      TZ: Asia/Seoul
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-admin1234!}
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo/fds-core:ro
+    networks:
+      - fds-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/login >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  jenkins_home:
+
+networks:
+  fds-net:
+    name: fds-net
+    driver: bridge

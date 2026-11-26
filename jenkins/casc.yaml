@@ -1,0 +1,37 @@
+jenkins:
+  systemMessage: "FDS Core Local CI/CD Server (Jenkins + JCasC + Docker Compose)"
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD:-admin1234!}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+unclassified:
+  location:
+    url: "http://localhost:8090/"
+
+jobs:
+  - script: >
+      pipelineJob('fds-core-cicd') {
+        displayName('FDS Core — Full CI/CD Pipeline')
+        description('Spring Boot · Python AI · React 프론트엔드 자동 테스트, Docker 이미지 빌드, 컨테이너 배포 및 헬스체크 파이프라인')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('/repo/fds-core')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+            lightweight(false)
+          }
+        }
+      }

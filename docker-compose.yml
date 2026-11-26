@@ -13,6 +13,8 @@ services:
       TZ: Asia/Seoul
     volumes:
       - mariadb_data:/var/lib/mysql
+    networks:
+      - fds-net
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -32,6 +34,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - fds-net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -42,7 +46,7 @@ services:
         limits:
           memory: 1G
 
-  # 3. Kafka (Apache 공식 이미지 / KRaft 모드)
+  # 3. Kafka (Apache 공식 이미지 / KRaft 모드 — 호스트 9092 + 컨테이너 내부 29092 이중 리스너)
   kafka:
     image: apache/kafka:3.7.0
     container_name: fds-kafka
@@ -51,8 +55,10 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -62,6 +68,8 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     volumes:
       - kafka_data:/tmp/kraft-combined-logs
+    networks:
+      - fds-net
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 15s
@@ -76,3 +84,8 @@ volumes:
   mariadb_data:
   redis_data:
   kafka_data:
+
+networks:
+  fds-net:
+    name: fds-net
+    driver: bridge

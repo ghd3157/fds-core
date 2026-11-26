@@ -1,0 +1,67 @@
+services:
+  fds-spring-app:
+    image: fds-spring-server:${IMAGE_TAG:-latest}
+    container_name: fds-spring-app
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:mariadb://mariadb:3306/${MARIADB_DATABASE:-fds_db}
+      MARIADB_USER: ${MARIADB_USER:-fds_user}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-fdspassword}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      FDS_AI_SERVER_URL: http://fds-python-app:8000
+      FDS_CORS_ORIGINS: http://localhost:5173
+      JWT_SECRET: ${JWT_SECRET:-dGhpcyBpcyBhIHNlY3VyZSBzZWNyZXQga2V5IGZvciBmZHMgc3lzdGVt}
+      FDS_INGEST_API_KEY: ${FDS_INGEST_API_KEY:-fds-demo-api-key-change-me}
+      FDS_ADMIN_USERNAME: ${FDS_ADMIN_USERNAME:-admin}
+      FDS_ADMIN_PASSWORD: ${FDS_ADMIN_PASSWORD:-admin1234!}
+      FDS_VIEWER_USERNAME: ${FDS_VIEWER_USERNAME:-viewer}
+      FDS_VIEWER_PASSWORD: ${FDS_VIEWER_PASSWORD:-viewer1234!}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - fds-net
+    restart: unless-stopped
+
+  fds-python-app:
+    image: fds-python-server:${IMAGE_TAG:-latest}
+    container_name: fds-python-app
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      FDS_FRAUD_THRESHOLD: ${FDS_FRAUD_THRESHOLD:-80.0}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - fds-net
+    restart: unless-stopped
+
+  fds-frontend-app:
+    image: fds-frontend:${IMAGE_TAG:-latest}
+    container_name: fds-frontend-app
+    ports:
+      - "5173:80"
+    depends_on:
+      - fds-spring-app
+    networks:
+      - fds-net
+    restart: unless-stopped
+
+networks:
+  fds-net:
+    name: fds-net
+    driver: bridge
